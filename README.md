@@ -97,7 +97,7 @@ docker compose run --rm --build plugin-builder
 
 The Docker builder is pinned to `linux/amd64`, so the build runs as `amd64` even on an `arm64` host.
 The Go build in Docker also disables VCS stamping, so the build does not depend on Git metadata being readable from the mounted workspace.
-Go and npm caches are stored inside the repository under `.cache/`, and `webapp/node_modules` is also bind-mounted, so repeated Docker builds can reuse both downloaded packages and installed dependencies.
+Go and npm caches are stored inside the repository under `.cache/`, so repeated Docker builds can reuse downloaded modules and npm packages.
 The build output is bind-mounted explicitly, so the generated plugin bundle always appears on the host in `dist/`.
 Cache directories are created before the build starts, and the same cache paths are exported through both Docker Compose and `make`, so Go module downloads and npm package downloads should be reused across repeated `docker compose run --rm plugin-builder` runs.
 

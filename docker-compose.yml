@@ -26,8 +26,7 @@ services:
       - ./.cache/gopath:/workspace/.cache/gopath
       - ./.cache/gomod:/workspace/.cache/gomod
       - ./.cache/npm:/workspace/.cache/npm
-      - ./webapp/node_modules:/workspace/webapp/node_modules
     command:
       - bash
       - -lc
-      - mkdir -p /workspace/dist /workspace/.cache/go-build /workspace/.cache/gopath /workspace/.cache/gomod /workspace/.cache/npm /workspace/webapp/node_modules && git config --global --add safe.directory /workspace && make dist-linux-amd64
+      - mkdir -p /workspace/dist /workspace/.cache/go-build /workspace/.cache/gopath /workspace/.cache/gomod /workspace/.cache/npm && rm -rf /workspace/webapp/node_modules && git config --global --add safe.directory /workspace && make dist-linux-amd64

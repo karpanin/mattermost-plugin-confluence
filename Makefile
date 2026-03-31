@@ -6,8 +6,8 @@ GO_TEST_FLAGS ?= -race
 GO_BUILD_FLAGS ?= -buildvcs=false
 MM_UTILITIES_DIR ?= ../mattermost-utilities
 DLV_DEBUG_PORT := 2346
-DEFAULT_GOOS := $(shell go env GOOS)
-DEFAULT_GOARCH := $(shell go env GOARCH)
+DEFAULT_GOOS := $(shell $(GO) env GOOS 2> /dev/null)
+DEFAULT_GOARCH := $(shell $(GO) env GOARCH 2> /dev/null)
 
 export GO111MODULE=on
 export GOCACHE ?= $(PWD)/.cache/go-build
@@ -50,7 +50,7 @@ endif
 # Used for semver bumping
 PROTECTED_BRANCH := master
 APP_NAME    ?= $(notdir $(CURDIR))
-CURRENT_VERSION := $(shell git describe --abbrev=0 --tags)
+CURRENT_VERSION := $(shell git describe --abbrev=0 --tags 2> /dev/null || echo v0.0.0)
 LATEST_RELEASE_TAG_RAW := $(shell git tag -l "v*" --sort=-v:refname | grep -v '\-rc' | head -n 1 || true)
 LATEST_RELEASE_TAG := $(strip $(LATEST_RELEASE_TAG_RAW))
 ifeq ($(LATEST_RELEASE_TAG),)
