@@ -171,6 +171,13 @@ func (p *Plugin) CompleteOAuth2(mattermostUserID, code, state string, instanceID
 		OAuth2Token:      encryptedToken,
 		IsAdmin:          isAdmin,
 		MattermostUserID: mattermostUserID,
+		Settings: &types.ConnectionSettings{
+			Notifications: true,
+			RolesForDMNotification: map[string]bool{
+				settingMentionRole:  true,
+				settingWatchingRole: true,
+			},
+		},
 	}
 
 	client, err := p.GetServerClient(instanceID, connection)

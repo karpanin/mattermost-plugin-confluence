@@ -83,6 +83,38 @@ export const closeSubscriptionModal = () => (dispatch) => {
     });
 };
 
+export const openCreatePageModal = (postId) => (dispatch) => {
+    dispatch({
+        type: Constants.ACTION_TYPES.OPEN_CREATE_PAGE_MODAL,
+        data: {postId},
+    });
+};
+
+export const closeCreatePageModal = () => (dispatch) => {
+    dispatch({
+        type: Constants.ACTION_TYPES.CLOSE_CREATE_PAGE_MODAL,
+    });
+};
+
+export const createPageFromPost = (body) => {
+    return async () => {
+        let data = null;
+        try {
+            data = await Client.createPageFromPost(body);
+        } catch (error) {
+            return {
+                data,
+                error,
+            };
+        }
+
+        return {
+            data,
+            error: null,
+        };
+    };
+};
+
 export const getChannelSubscription = (channelID, alias, userID) => async (dispatch) => {
     try {
         const response = await Client.getChannelSubscription(channelID, alias);

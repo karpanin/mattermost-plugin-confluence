@@ -15,4 +15,6 @@ type RESTService interface {
 	GetSpaceData(string) (*SpaceResponse, error)
 	GetPageData(int) (*PageResponse, error)
 	GetSpaceKeyFromSpaceID(int64) (string, error)
+	CreatePage(in *CreatePageInput) (*CreatedPage, error)
+	GetContentWatchers(pageID string) ([]ConfluenceWatcher, error)
 }

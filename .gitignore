@@ -78,6 +78,7 @@ vendor/
 .history/
 coverage.txt
 bin
+.cache/
 
 # webapp test cases
 webapp/build/test-results.xml

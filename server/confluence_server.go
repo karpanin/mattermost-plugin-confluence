@@ -99,7 +99,7 @@ func handleConfluenceServerWebhook(w http.ResponseWriter, r *http.Request, p *Pl
 				}
 
 				eventData.BaseURL = pluginConfig.ConfluenceURL
-				notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName)
+				notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName, event.UserKey)
 			} else {
 				p.client.Log.Info("Error getting client for the user who triggered webhook event. Sending generic notification")
 				notification.SendGenericWHNotification(event, p.BotUserID, pluginConfig.ConfluenceURL)
@@ -150,7 +150,7 @@ func handleConfluenceServerWebhook(w http.ResponseWriter, r *http.Request, p *Pl
 			}
 		}
 
-		notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName)
+		notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName, event.UserKey)
 	} else {
 		event, err := serializer.ConfluenceServerEventFromJSON(r.Body)
 		if err != nil {
@@ -366,6 +366,22 @@ func (p *Plugin) MakeHTTPCallWithAPIToken(path string) ([]byte, int, error) {
 	}
 
 	return body, resp.StatusCode, err
+}
+
+func (p *Plugin) GetContentWatchersWithAPIToken(pageID string, pluginConfig *config.Configuration) ([]ConfluenceWatcher, error) {
+	path := fmt.Sprintf("%s%s%s/watchers", pluginConfig.ConfluenceURL, PathContentData, pageID)
+
+	body, statusCode, err := p.MakeHTTPCallWithAPIToken(path)
+	if err != nil || statusCode != http.StatusOK {
+		return nil, fmt.Errorf("error getting content watchers with API token: %w", err)
+	}
+
+	response := &ContentWatchersResponse{}
+	if err := json.Unmarshal(body, response); err != nil {
+		return nil, fmt.Errorf("error unmarshalling content watchers with API token: %w", err)
+	}
+
+	return response.Results, nil
 }
 
 func (p *Plugin) SetAdminAPITokenRequestHeader(req *http.Request) error {

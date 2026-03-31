@@ -25,6 +25,12 @@ type Connection struct {
 	DefaultProjectKey string `json:"default_project_key,omitempty"`
 	IsAdmin           bool   `json:"is_admin,omitempty"`
 	MattermostUserID  string `json:"mattermost_user_id,omitempty"`
+	Settings          *ConnectionSettings `json:"settings,omitempty"`
+}
+
+type ConnectionSettings struct {
+	Notifications          bool            `json:"notifications"`
+	RolesForDMNotification map[string]bool `json:"roles_for_dm_notification,omitempty"`
 }
 
 func (c *Connection) ConfluenceAccountID() string {
@@ -39,6 +45,27 @@ func NewUser(mattermostUserID string) *User {
 	return &User{
 		MattermostUserID: mattermostUserID,
 	}
+}
+
+func (c *Connection) ShouldReceiveNotification(role string) bool {
+	if c.Settings == nil {
+		return true
+	}
+
+	if !c.Settings.Notifications {
+		return false
+	}
+
+	if c.Settings.RolesForDMNotification == nil {
+		return true
+	}
+
+	value, ok := c.Settings.RolesForDMNotification[role]
+	if !ok {
+		return true
+	}
+
+	return value
 }
 
 func (user *User) AsConfigMap() map[string]interface{} {

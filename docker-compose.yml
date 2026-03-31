@@ -1,7 +1,33 @@
-version: '3'
 services:
   confluence:
     image: atlassian/confluence-server
     ports:
       -  "8090:8090"
       -  "8091:8091"
+  plugin-builder:
+    image: mattermost-plugin-confluence-plugin-builder:local
+    build:
+      context: .
+      dockerfile: build/Dockerfile.builder
+    platform: linux/amd64
+    working_dir: /workspace
+    environment:
+      GO: /usr/local/go/bin/go
+      NPM: /usr/bin/npm
+      PATH: /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+      GOCACHE: /workspace/.cache/go-build
+      GOPATH: /workspace/.cache/gopath
+      GOMODCACHE: /workspace/.cache/gomod
+      NPM_CONFIG_CACHE: /workspace/.cache/npm
+    volumes:
+      - .:/workspace
+      - ./dist:/workspace/dist
+      - ./.cache/go-build:/workspace/.cache/go-build
+      - ./.cache/gopath:/workspace/.cache/gopath
+      - ./.cache/gomod:/workspace/.cache/gomod
+      - ./.cache/npm:/workspace/.cache/npm
+      - ./webapp/node_modules:/workspace/webapp/node_modules
+    command:
+      - bash
+      - -lc
+      - mkdir -p /workspace/dist /workspace/.cache/go-build /workspace/.cache/gopath /workspace/.cache/gomod /workspace/.cache/npm /workspace/webapp/node_modules && git config --global --add safe.directory /workspace && make dist-linux-amd64

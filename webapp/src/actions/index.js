@@ -1,5 +1,5 @@
 import {
-    closeSubscriptionModal, openSubscriptionModal, saveChannelSubscription, editChannelSubscription, getChannelSubscription, getSubscriptionAccess, getPluginConfig,
+    closeSubscriptionModal, openSubscriptionModal, saveChannelSubscription, editChannelSubscription, getChannelSubscription, getSubscriptionAccess, getPluginConfig, openCreatePageModal, closeCreatePageModal, createPageFromPost,
 } from './subscription_modal';
 
 export {
@@ -10,4 +10,7 @@ export {
     closeSubscriptionModal,
     editChannelSubscription,
     getChannelSubscription,
+    openCreatePageModal,
+    closeCreatePageModal,
+    createPageFromPost,
 };

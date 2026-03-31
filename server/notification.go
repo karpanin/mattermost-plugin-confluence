@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -9,8 +11,10 @@ import (
 
 	"github.com/mattermost/mattermost/server/public/model"
 
+	"github.com/mattermost/mattermost-plugin-confluence/server/config"
 	"github.com/mattermost/mattermost-plugin-confluence/server/serializer"
 	"github.com/mattermost/mattermost-plugin-confluence/server/service"
+	"github.com/mattermost/mattermost-plugin-confluence/server/store"
 	"github.com/mattermost/mattermost-plugin-confluence/server/util"
 )
 
@@ -20,6 +24,18 @@ var eventActions = map[string]string{
 	serializer.PageTrashedEvent:  "trashed",
 	serializer.PageRestoredEvent: "restored",
 	serializer.PageRemovedEvent:  "removed",
+}
+
+const (
+	notificationTypeMention  = "mention"
+	notificationTypeWatching = "watching"
+)
+
+var mentionIdentifierPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`data-linked-resource-id="([^"]+)"`),
+	regexp.MustCompile(`data-userkey="([^"]+)"`),
+	regexp.MustCompile(`ri:userkey="([^"]+)"`),
+	regexp.MustCompile(`data-username="([^"]+)"`),
 }
 
 type notification struct {
@@ -32,7 +48,7 @@ func (p *Plugin) getNotification() *notification {
 	}
 }
 
-func (n *notification) SendConfluenceNotifications(event serializer.ConfluenceEventV2, eventType, botUserID string, eventTriggerer string) {
+func (n *notification) SendConfluenceNotifications(event serializer.ConfluenceEventV2, eventType, botUserID string, eventTriggerer string, eventTriggererKey string) {
 	url := event.GetURL()
 	if url == "" {
 		return
@@ -55,6 +71,8 @@ func (n *notification) SendConfluenceNotifications(event serializer.ConfluenceEv
 			n.API.LogError("Unable to create Post in Mattermost", "Error", err.Error())
 		}
 	}
+
+	n.sendPersonalNotifications(event, eventType, url, pageID, botUserID, eventTriggerer, eventTriggererKey)
 }
 
 func (n *notification) SendGenericWHNotification(event *serializer.ConfluenceServerWebhookPayload, botUserID, url string) {
@@ -146,4 +164,173 @@ func GetURLSubscriptionChannelIDs(urlSubscriptions serializer.StringArrayMap, ev
 	}
 
 	return urlSubscriptionChannelIDs
+}
+
+func (n *notification) sendPersonalNotifications(event serializer.ConfluenceEventV2, eventType, baseURL, pageID, botUserID, eventTriggerer, eventTriggererKey string) {
+	recipients := map[string]string{}
+	if strings.Contains(eventType, Comment) {
+		for _, userID := range n.resolveMentionedUserIDs(baseURL, event, eventTriggererKey) {
+			recipients[userID] = notificationTypeMention
+		}
+	}
+
+	if eventType == serializer.PageUpdatedEvent {
+		for _, userID := range n.resolveWatcherUserIDs(pageID, baseURL, eventTriggererKey) {
+			if _, exists := recipients[userID]; !exists {
+				recipients[userID] = notificationTypeWatching
+			}
+		}
+	}
+
+	for userID, reason := range recipients {
+		if userID == "" {
+			continue
+		}
+
+		if err := n.sendPersonalNotificationToUser(userID, reason, eventType, event, baseURL, botUserID, eventTriggerer); err != nil {
+			n.API.LogError("Unable to send personal Confluence notification", "UserID", userID, "Error", err.Error())
+		}
+	}
+}
+
+func (n *notification) resolveMentionedUserIDs(instanceID string, event serializer.ConfluenceEventV2, eventTriggererKey string) []string {
+	serverEvent, ok := event.(*ConfluenceServerEvent)
+	if !ok || serverEvent.Comment == nil {
+		return nil
+	}
+
+	mentionedIDs := map[string]struct{}{}
+	for _, identifier := range extractMentionIdentifiers(serverEvent.Comment.Body.View.Value) {
+		if identifier == "" || identifier == eventTriggererKey {
+			continue
+		}
+
+		mmUserID, err := store.GetMattermostUserIDFromConfluenceID(instanceID, identifier)
+		if err != nil || mmUserID == nil || *mmUserID == "" {
+			continue
+		}
+		mentionedIDs[*mmUserID] = struct{}{}
+	}
+
+	return mapKeys(mentionedIDs)
+}
+
+func (n *notification) resolveWatcherUserIDs(pageID, instanceID, eventTriggererKey string) []string {
+	if pageID == "" {
+		return nil
+	}
+
+	pluginConfig := config.GetConfig()
+	if pluginConfig.AdminAPIToken == "" {
+		return nil
+	}
+
+	watchers, err := n.GetContentWatchersWithAPIToken(pageID, pluginConfig)
+	if err != nil {
+		n.API.LogError("Unable to get Confluence content watchers", "PageID", pageID, "Error", err.Error())
+		return nil
+	}
+
+	mmUserIDs := map[string]struct{}{}
+	for _, watcher := range watchers {
+		identifier := watcher.UserKey
+		if identifier == "" {
+			identifier = watcher.Username
+		}
+		if identifier == "" || identifier == eventTriggererKey {
+			continue
+		}
+
+		mmUserID, lookupErr := store.GetMattermostUserIDFromConfluenceID(instanceID, identifier)
+		if lookupErr != nil || mmUserID == nil || *mmUserID == "" {
+			continue
+		}
+
+		mmUserIDs[*mmUserID] = struct{}{}
+	}
+
+	return mapKeys(mmUserIDs)
+}
+
+func (n *notification) sendPersonalNotificationToUser(userID, reason, eventType string, event serializer.ConfluenceEventV2, baseURL, botUserID, eventTriggerer string) error {
+	connection, err := store.LoadConnection(baseURL, userID)
+	if err != nil {
+		return err
+	}
+
+	if !connection.ShouldReceiveNotification(reason) {
+		return nil
+	}
+
+	message := buildPersonalNotificationMessage(reason, eventType, event, baseURL, eventTriggerer)
+	if message == "" {
+		return nil
+	}
+
+	channel, appErr := n.client.Channel.GetDirect(userID, botUserID)
+	if appErr != nil {
+		return errors.New(appErr.Error())
+	}
+
+	_, appErr = n.API.CreatePost(&model.Post{
+		UserId:    botUserID,
+		ChannelId: channel.Id,
+		Message:   message,
+	})
+	if appErr != nil {
+		return errors.New(appErr.Error())
+	}
+
+	return nil
+}
+
+func buildPersonalNotificationMessage(reason, eventType string, event serializer.ConfluenceEventV2, baseURL, eventTriggerer string) string {
+	serverEvent, ok := event.(*ConfluenceServerEvent)
+	if !ok {
+		return ""
+	}
+
+	switch reason {
+	case notificationTypeMention:
+		if serverEvent.Comment == nil {
+			return ""
+		}
+		pageName := serverEvent.GetPageDisplayNameForCommentEvents(baseURL)
+		spaceName := serverEvent.GetSpaceDisplayNameForCommentEvents(baseURL)
+		commentURL := joinURL(baseURL, serverEvent.Comment.Links.Self)
+		return fmt.Sprintf("%s mentioned you in a [comment](%s) on %s in %s.", eventTriggerer, commentURL, pageName, spaceName)
+	case notificationTypeWatching:
+		if eventType != serializer.PageUpdatedEvent || serverEvent.Page == nil {
+			return ""
+		}
+		pageName := serverEvent.GetPageDisplayNameForPageEvents(baseURL)
+		spaceName := serverEvent.GetSpaceDisplayNameForPageEvents(baseURL)
+		return fmt.Sprintf("%s updated %s in %s.\n\n*You are watching this page in Confluence.*", eventTriggerer, pageName, spaceName)
+	default:
+		return ""
+	}
+}
+
+func extractMentionIdentifiers(body string) []string {
+	identifiers := map[string]struct{}{}
+	for _, pattern := range mentionIdentifierPatterns {
+		matches := pattern.FindAllStringSubmatch(body, -1)
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			identifiers[strings.TrimSpace(match[1])] = struct{}{}
+		}
+	}
+
+	return mapKeys(identifiers)
+}
+
+func mapKeys(values map[string]struct{}) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+
+	return keys
 }

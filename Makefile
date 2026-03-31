@@ -2,15 +2,18 @@ GO ?= $(shell command -v go 2> /dev/null)
 NPM ?= $(shell command -v npm 2> /dev/null)
 CURL ?= $(shell command -v curl 2> /dev/null)
 MM_DEBUG ?=
-GOPATH ?= $(shell go env GOPATH)
 GO_TEST_FLAGS ?= -race
-GO_BUILD_FLAGS ?=
+GO_BUILD_FLAGS ?= -buildvcs=false
 MM_UTILITIES_DIR ?= ../mattermost-utilities
 DLV_DEBUG_PORT := 2346
 DEFAULT_GOOS := $(shell go env GOOS)
 DEFAULT_GOARCH := $(shell go env GOARCH)
 
 export GO111MODULE=on
+export GOCACHE ?= $(PWD)/.cache/go-build
+export GOPATH ?= $(PWD)/.cache/gopath
+export GOMODCACHE ?= $(PWD)/.cache/gomod
+export NPM_CONFIG_CACHE ?= $(PWD)/.cache/npm
 
 # We need to export GOBIN to allow it to be set
 # for processes spawned from the Makefile
@@ -27,6 +30,10 @@ default: all
 include build/setup.mk
 
 BUNDLE_NAME ?= $(PLUGIN_ID)-$(PLUGIN_VERSION).tar.gz
+TARGET_GOOS ?=
+TARGET_GOARCH ?=
+TARGET_EXECUTABLE ?= plugin-$(TARGET_GOOS)-$(TARGET_GOARCH)$(if $(filter windows,$(TARGET_GOOS)),.exe,)
+TARGET_BUNDLE_NAME ?= $(PLUGIN_ID)-$(PLUGIN_VERSION)-$(TARGET_GOOS)-$(TARGET_GOARCH).tar.gz
 
 # Include custom makefile, if present
 ifneq ($(wildcard build/custom.mk),)
@@ -42,7 +49,7 @@ endif
 # ====================================================================================
 # Used for semver bumping
 PROTECTED_BRANCH := master
-APP_NAME    := $(shell basename -s .git `git config --get remote.origin.url`)
+APP_NAME    ?= $(notdir $(CURDIR))
 CURRENT_VERSION := $(shell git describe --abbrev=0 --tags)
 LATEST_RELEASE_TAG_RAW := $(shell git tag -l "v*" --sort=-v:refname | grep -v '\-rc' | head -n 1 || true)
 LATEST_RELEASE_TAG := $(strip $(LATEST_RELEASE_TAG_RAW))
@@ -262,6 +269,61 @@ endif
 ## Builds and bundles the plugin.
 .PHONY: dist
 dist: apply server webapp bundle
+
+.PHONY: docker-dist
+docker-dist:
+	docker compose run --rm --build plugin-builder
+
+.PHONY: docker-dist-amd64
+docker-dist-amd64:
+	docker compose run --rm --build --platform linux/amd64 plugin-builder
+
+.PHONY: server-target
+server-target:
+ifeq ($(strip $(TARGET_GOOS)),)
+	$(error TARGET_GOOS is required, e.g. make dist-target TARGET_GOOS=linux TARGET_GOARCH=amd64)
+endif
+ifeq ($(strip $(TARGET_GOARCH)),)
+	$(error TARGET_GOARCH is required, e.g. make dist-target TARGET_GOOS=linux TARGET_GOARCH=amd64)
+endif
+	mkdir -p server/dist
+	rm -f server/dist/plugin-*
+	cd server && env CGO_ENABLED=0 GOOS=$(TARGET_GOOS) GOARCH=$(TARGET_GOARCH) $(GO) build $(GO_BUILD_FLAGS) $(GO_BUILD_GCFLAGS) -trimpath -o dist/$(TARGET_EXECUTABLE);
+
+.PHONY: bundle-target
+bundle-target:
+ifeq ($(strip $(TARGET_GOOS)),)
+	$(error TARGET_GOOS is required, e.g. make dist-target TARGET_GOOS=linux TARGET_GOARCH=amd64)
+endif
+ifeq ($(strip $(TARGET_GOARCH)),)
+	$(error TARGET_GOARCH is required, e.g. make dist-target TARGET_GOOS=linux TARGET_GOARCH=amd64)
+endif
+	rm -rf dist/
+	mkdir -p dist/$(PLUGIN_ID)
+	./build/bin/manifest dist
+ifneq ($(wildcard $(ASSETS_DIR)/.),)
+	cp -r $(ASSETS_DIR) dist/$(PLUGIN_ID)/
+endif
+ifneq ($(HAS_PUBLIC),)
+	cp -r public dist/$(PLUGIN_ID)/
+endif
+ifneq ($(HAS_SERVER),)
+	mkdir -p dist/$(PLUGIN_ID)/server/dist
+	cp server/dist/$(TARGET_EXECUTABLE) dist/$(PLUGIN_ID)/server/dist/
+endif
+ifneq ($(HAS_WEBAPP),)
+	mkdir -p dist/$(PLUGIN_ID)/webapp
+	cp -r webapp/dist dist/$(PLUGIN_ID)/webapp/
+endif
+	cd dist && tar -cvzf $(TARGET_BUNDLE_NAME) $(PLUGIN_ID)
+	@echo plugin built at: dist/$(TARGET_BUNDLE_NAME)
+
+.PHONY: dist-target
+dist-target: apply server-target webapp bundle-target
+
+.PHONY: dist-linux-amd64
+dist-linux-amd64:
+	$(MAKE) dist-target TARGET_GOOS=linux TARGET_GOARCH=amd64
 
 ## Builds and installs the plugin to a server.
 .PHONY: deploy

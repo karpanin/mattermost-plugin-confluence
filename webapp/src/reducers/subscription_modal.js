@@ -28,3 +28,16 @@ export const subscriptionEditModal = (state = {}, action) => {
         return state;
     }
 };
+
+export const createPageModal = (state = {}, action) => {
+    switch (action.type) {
+    case Constants.ACTION_TYPES.OPEN_CREATE_PAGE_MODAL:
+        return {
+            postId: action.data.postId,
+        };
+    case Constants.ACTION_TYPES.CLOSE_CREATE_PAGE_MODAL:
+        return {};
+    default:
+        return state;
+    }
+};

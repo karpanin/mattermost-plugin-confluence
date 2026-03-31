@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 	"strconv"
 	"strings"
@@ -81,6 +82,23 @@ type History struct {
 	CreatedBy CreatedBy `json:"createdBy"`
 }
 
+type ContentBodyStorage struct {
+	Value          string `json:"value"`
+	Representation string `json:"representation"`
+}
+
+type ContentBodyPayload struct {
+	Storage ContentBodyStorage `json:"storage"`
+}
+
+type ContentSpacePayload struct {
+	Key string `json:"key"`
+}
+
+type ContentAncestorPayload struct {
+	ID string `json:"id"`
+}
+
 type CommentResponse struct {
 	ID        string           `json:"id"`
 	Title     string           `json:"title"`
@@ -98,6 +116,37 @@ type PageResponse struct {
 	Body    Body          `json:"body"`
 	Links   Links         `json:"_links"`
 	History History       `json:"history"`
+}
+
+type CreatePageInput struct {
+	Title        string
+	SpaceKey     string
+	ParentPageID string
+	Body         string
+}
+
+type CreatePagePayload struct {
+	Type      string                  `json:"type"`
+	Title     string                  `json:"title"`
+	Space     ContentSpacePayload     `json:"space"`
+	Body      ContentBodyPayload      `json:"body"`
+	Ancestors []ContentAncestorPayload `json:"ancestors,omitempty"`
+}
+
+type CreatedPage struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Links Links  `json:"_links"`
+}
+
+type ConfluenceWatcher struct {
+	UserKey     string `json:"userKey"`
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+}
+
+type ContentWatchersResponse struct {
+	Results []ConfluenceWatcher `json:"results"`
 }
 
 type ConfluenceServerEvent struct {
@@ -252,4 +301,58 @@ func (csc *confluenceServerClient) GetUserFromUserKey(userKey string) (*Confluen
 	}
 
 	return &user, nil
+}
+
+func (csc *confluenceServerClient) CreatePage(in *CreatePageInput) (*CreatedPage, error) {
+	payload := CreatePagePayload{
+		Type:  "page",
+		Title: strings.TrimSpace(in.Title),
+		Space: ContentSpacePayload{Key: strings.TrimSpace(in.SpaceKey)},
+		Body: ContentBodyPayload{
+			Storage: ContentBodyStorage{
+				Value:          in.Body,
+				Representation: "storage",
+			},
+		},
+	}
+
+	if strings.TrimSpace(in.ParentPageID) != "" {
+		payload.Ancestors = []ContentAncestorPayload{{ID: strings.TrimSpace(in.ParentPageID)}}
+	}
+
+	created := &CreatedPage{}
+	if _, _, err := service.CallJSONWithURL(csc.URL, PathContentData, http.MethodPost, payload, created, csc.HTTPClient); err != nil {
+		return nil, err
+	}
+
+	return created, nil
+}
+
+func (csc *confluenceServerClient) GetContentWatchers(pageID string) ([]ConfluenceWatcher, error) {
+	response := &ContentWatchersResponse{}
+	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s%s/watchers", PathContentData, pageID), http.MethodGet, nil, response, csc.HTTPClient); err != nil {
+		return nil, err
+	}
+
+	return response.Results, nil
+}
+
+func formatMattermostPostForConfluence(postMessage, permalink string) string {
+	lines := strings.Split(strings.TrimSpace(postMessage), "\n")
+	paragraphs := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		paragraphs = append(paragraphs, "<p>"+html.EscapeString(line)+"</p>")
+	}
+
+	if len(paragraphs) == 0 {
+		paragraphs = append(paragraphs, "<p><em>Original Mattermost message did not contain text.</em></p>")
+	}
+
+	paragraphs = append(paragraphs, fmt.Sprintf("<p><a href=\"%s\">View original message in Mattermost</a></p>", html.EscapeString(permalink)))
+
+	return strings.Join(paragraphs, "")
 }

@@ -6,7 +6,10 @@ const isSubscriptionModalVisible = (state) => getPluginState(state).subscription
 
 const isSubscriptionEditModalVisible = (state) => getPluginState(state).subscriptionEditModal;
 
+const getCreatePageModal = (state) => getPluginState(state).createPageModal || {};
+
 export default {
     isSubscriptionModalVisible,
     isSubscriptionEditModalVisible,
+    getCreatePageModal,
 };

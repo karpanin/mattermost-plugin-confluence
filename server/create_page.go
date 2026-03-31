@@ -1,0 +1,177 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/mattermost/mattermost/server/public/model"
+
+	"github.com/mattermost/mattermost-plugin-confluence/server/config"
+	"github.com/mattermost/mattermost-plugin-confluence/server/store"
+	"github.com/mattermost/mattermost-plugin-confluence/server/util"
+)
+
+var createPageFromPost = &Endpoint{
+	Path:            "/page/from-post",
+	Method:          http.MethodPost,
+	Execute:         handleCreatePageFromPost,
+	IsAuthenticated: true,
+}
+
+type CreatePageFromPostRequest struct {
+	PostID       string `json:"postID"`
+	SpaceKey     string `json:"spaceKey"`
+	Title        string `json:"title"`
+	ParentPageID string `json:"parentPageID"`
+}
+
+type CreatePageFromPostResponse struct {
+	PageID   string `json:"pageID"`
+	Title    string `json:"title"`
+	PageURL  string `json:"pageURL"`
+	ThreadID string `json:"threadID"`
+}
+
+func handleCreatePageFromPost(w http.ResponseWriter, r *http.Request, p *Plugin) {
+	userID := r.Header.Get(config.HeaderMattermostUserID)
+	if userID == "" {
+		http.Error(w, "Not authorized", http.StatusUnauthorized)
+		return
+	}
+
+	pluginConfig := config.GetConfig()
+	if pluginConfig.ConfluenceURL == "" {
+		http.Error(w, "Confluence is not configured.", http.StatusInternalServerError)
+		return
+	}
+
+	req := &CreatePageFromPostRequest{}
+	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+		http.Error(w, "Could not decode request body.", http.StatusBadRequest)
+		return
+	}
+
+	req.PostID = strings.TrimSpace(req.PostID)
+	req.SpaceKey = strings.TrimSpace(req.SpaceKey)
+	req.Title = strings.TrimSpace(req.Title)
+	req.ParentPageID = strings.TrimSpace(req.ParentPageID)
+
+	if req.PostID == "" || req.SpaceKey == "" || req.Title == "" {
+		http.Error(w, "postID, spaceKey and title are required.", http.StatusBadRequest)
+		return
+	}
+
+	post, appErr := p.API.GetPost(req.PostID)
+	if appErr != nil || post == nil {
+		http.Error(w, "Original Mattermost post not found.", http.StatusNotFound)
+		return
+	}
+
+	if !p.hasChannelAccess(userID, post.ChannelId) {
+		http.Error(w, "User does not have access to this post.", http.StatusForbidden)
+		return
+	}
+
+	connection, err := store.LoadConnection(pluginConfig.ConfluenceURL, userID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, "User not connected. Please use `/confluence connect`.", http.StatusUnauthorized)
+			return
+		}
+
+		http.Error(w, "Unable to verify user's Confluence connection.", http.StatusInternalServerError)
+		return
+	}
+
+	if connection.ConfluenceAccountID() == "" {
+		http.Error(w, "User not connected. Please use `/confluence connect`.", http.StatusUnauthorized)
+		return
+	}
+
+	client, err := p.GetServerClient(pluginConfig.ConfluenceURL, connection)
+	if err != nil {
+		http.Error(w, "Failed to create Confluence client.", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err = client.GetSpaceData(req.SpaceKey); err != nil {
+		http.Error(w, "User does not have access to this Confluence space.", http.StatusForbidden)
+		return
+	}
+
+	if req.ParentPageID != "" {
+		parentPageID, convErr := strconv.Atoi(req.ParentPageID)
+		if convErr != nil {
+			http.Error(w, "parentPageID should be numeric.", http.StatusBadRequest)
+			return
+		}
+
+		if _, err = client.GetPageData(parentPageID); err != nil {
+			http.Error(w, "User does not have access to this parent Confluence page.", http.StatusForbidden)
+			return
+		}
+	}
+
+	permalink := getMattermostPermalink(req.PostID)
+	createdPage, err := client.CreatePage(&CreatePageInput{
+		Title:        req.Title,
+		SpaceKey:     req.SpaceKey,
+		ParentPageID: req.ParentPageID,
+		Body:         formatMattermostPostForConfluence(post.Message, permalink),
+	})
+	if err != nil {
+		http.Error(w, "Failed to create Confluence page.", http.StatusInternalServerError)
+		return
+	}
+
+	pageURL := joinURL(pluginConfig.ConfluenceURL, createdPage.Links.Self)
+	threadID := post.Id
+	if post.RootId != "" {
+		threadID = post.RootId
+	}
+
+	if err = publishCreatedPageThreadPost(p, userID, post.ChannelId, threadID, createdPage.Title, pageURL); err != nil {
+		http.Error(w, "Confluence page was created, but publishing the Mattermost thread post failed.", http.StatusInternalServerError)
+		return
+	}
+
+	_ = p.API.SendEphemeralPost(userID, &model.Post{
+		UserId:    config.BotUserID,
+		ChannelId: post.ChannelId,
+		RootId:    threadID,
+		Message:   fmt.Sprintf("Created Confluence page: [%s](%s)", createdPage.Title, pageURL),
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	if err = json.NewEncoder(w).Encode(CreatePageFromPostResponse{
+		PageID:   createdPage.ID,
+		Title:    createdPage.Title,
+		PageURL:  pageURL,
+		ThreadID: threadID,
+	}); err != nil {
+		http.Error(w, "Failed to encode response.", http.StatusInternalServerError)
+	}
+}
+
+func publishCreatedPageThreadPost(p *Plugin, userID, channelID, threadID, title, pageURL string) error {
+	post := &model.Post{
+		UserId:    userID,
+		ChannelId: channelID,
+		RootId:    threadID,
+		Message:   fmt.Sprintf("Created Confluence page: [%s](%s)", title, pageURL),
+	}
+
+	if _, appErr := p.API.CreatePost(post); appErr != nil {
+		return errors.New(appErr.Error())
+	}
+
+	return nil
+}
+
+func getMattermostPermalink(postID string) string {
+	return strings.TrimRight(util.GetSiteURL(), "/") + "/_redirect/pl/" + postID
+}

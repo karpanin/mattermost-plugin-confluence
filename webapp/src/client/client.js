@@ -42,6 +42,11 @@ export default class Client {
         return this.doGet(url);
     };
 
+    createPageFromPost = (body) => {
+        const url = `${this.pluginApiUrl}/page/from-post`;
+        return this.doPost(url, body);
+    };
+
     doGet = async (url, headers = {}) => {
         headers['X-Requested-With'] = 'XMLHttpRequest';
 

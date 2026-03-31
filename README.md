@@ -18,6 +18,8 @@
 
 A Mattermost plugin for Confluence. Supports Confluence Cloud, Server, and Data Center versions. This plugin helps your teams collaborate and keep in sync as Confluence Pages and Spaces get updated. Comments and activity can be pushed into specific Mattermost channels for full visibility. 
 
+Compatible with Mattermost Server `9.11.0+`.
+
 ## Features
 
 With the Confluence plugin, you can subscribe to a variety of events in Confluence, and specify which channels the associated notifications will appear in. 
@@ -78,6 +80,85 @@ example: `/confluence unsubscribe "Project A Subscription"`.
 ## Development 
 
 This plugin contains both a server and web app portion. Read our documentation about the [Developer Workflow](https://developers.mattermost.com/integrate/plugins/developer-workflow/) and [Developer Setup](https://developers.mattermost.com/integrate/plugins/developer-setup/) for more information about developing and extending plugins.
+
+### Build the plugin in Docker
+
+If you don't want to install Go or Node locally, you can build the plugin bundle entirely in Docker.
+
+Prerequisites:
+
+- Docker Desktop or Docker Engine with Compose support
+
+Build the plugin tarball for Mattermost `linux/amd64`:
+
+```bash
+docker compose run --rm --build plugin-builder
+```
+
+The Docker builder is pinned to `linux/amd64`, so the build runs as `amd64` even on an `arm64` host.
+The Go build in Docker also disables VCS stamping, so the build does not depend on Git metadata being readable from the mounted workspace.
+Go and npm caches are stored inside the repository under `.cache/`, and `webapp/node_modules` is also bind-mounted, so repeated Docker builds can reuse both downloaded packages and installed dependencies.
+The build output is bind-mounted explicitly, so the generated plugin bundle always appears on the host in `dist/`.
+Cache directories are created before the build starts, and the same cache paths are exported through both Docker Compose and `make`, so Go module downloads and npm package downloads should be reused across repeated `docker compose run --rm plugin-builder` runs.
+
+Or, if you prefer the Make target:
+
+```bash
+make docker-dist
+```
+
+There is also an explicit `amd64` target:
+
+```bash
+make docker-dist-amd64
+```
+
+The resulting plugin bundle will be created in:
+
+```text
+dist/com.mattermost.confluence-<version>-linux-amd64.tar.gz
+```
+
+### Build only for one architecture
+
+For a single-architecture bundle without Docker:
+
+```bash
+make dist-target TARGET_GOOS=linux TARGET_GOARCH=amd64
+```
+
+Shortcut for Linux x64:
+
+```bash
+make dist-linux-amd64
+```
+
+This produces only the `linux-amd64` server binary in the archive instead of bundling binaries for every platform.
+
+### Upload the built plugin to Mattermost
+
+1. Build the plugin bundle with `docker compose run --rm plugin-builder`.
+2. Open Mattermost as a system administrator.
+3. Go to **System Console > Plugins > Plugin Management**.
+4. Enable plugin uploads if they are disabled.
+5. Select **Upload Plugin**.
+6. Choose the generated file from the local repository `dist/` directory.
+7. After upload, enable the Confluence plugin in Mattermost.
+
+PowerShell example for the build step from the repository root:
+
+```powershell
+docker compose run --rm --build plugin-builder
+```
+
+If you want to force the platform explicitly from the command line:
+
+```powershell
+docker compose run --rm --build --platform linux/amd64 plugin-builder
+```
+
+After the build completes, upload the generated `dist\com.mattermost.confluence-<version>.tar.gz` file in Mattermost.
+After the new single-arch build completes, upload `dist\com.mattermost.confluence-<version>-linux-amd64.tar.gz`.
 
 ## Note for Confluence server versions greater or equal to 9
 

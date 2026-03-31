@@ -37,7 +37,8 @@ const (
 		"* `/confluence subscribe` - Subscribe the current channel to notifications from Confluence.\n" +
 		"* `/confluence unsubscribe \"<name>\"` - Unsubscribe the current channel from notifications associated with the given subscription name.\n" +
 		"* `/confluence list` - List all subscriptions for the current channel.\n" +
-		"* `/confluence edit \"<name>\"` - Edit the subscription settings associated with the given subscription name.\n"
+		"* `/confluence edit \"<name>\"` - Edit the subscription settings associated with the given subscription name.\n" +
+		"* `/confluence settings notifications [mention|watching] [on|off]` - Manage personal Confluence DM notifications.\n"
 
 	sysAdminHelpText = "\n###### For System Administrators:\n" +
 		"Setup Instructions:\n" +
@@ -80,6 +81,7 @@ var ConfluenceCommandHandler = Handler{
 		"install/server": showInstallServerHelp,
 		"connect":        executeConnect,
 		"disconnect":     executeDisconnect,
+		"settings/notifications": settingsNotificationsCommand,
 		"help":           confluenceHelpCommand,
 	},
 	defaultHandler: executeConfluenceDefault,
@@ -139,6 +141,27 @@ func getAutoCompleteData() *model.AutocompleteData {
 
 	disconnect := model.NewAutocompleteData("disconnect", "", "Disconnect your Mattermost account from your Confluence account")
 	confluence.AddCommand(disconnect)
+
+	settings := model.NewAutocompleteData("settings", "", "Manage your personal Confluence settings")
+	notifications := model.NewAutocompleteData("notifications", "[mention|watching] [on|off]", "Manage personal Confluence DM notifications")
+	roleItems := []model.AutocompleteListItem{{
+		HelpText: "Manage notifications when you are mentioned in a Confluence comment",
+		Item:     "mention",
+	}, {
+		HelpText: "Manage notifications for pages you are watching in Confluence",
+		Item:     "watching",
+	}}
+	notifications.AddStaticListArgument("", false, roleItems)
+	valueItems := []model.AutocompleteListItem{{
+		HelpText: "Turn this notification on",
+		Item:     "on",
+	}, {
+		HelpText: "Turn this notification off",
+		Item:     "off",
+	}}
+	notifications.AddStaticListArgument("", false, valueItems)
+	settings.AddCommand(notifications)
+	confluence.AddCommand(settings)
 
 	return confluence
 }
