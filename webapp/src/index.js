@@ -50,7 +50,7 @@ class PluginClass {
                 }
 
                 if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command) {
-                    store.dispatch(openCreatePageModal(postId));
+                    openCreatePageModal(postId)(store.dispatch);
                     return;
                 }
             },
@@ -86,7 +86,7 @@ class PluginClass {
                 }
 
                 if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command) {
-                    store.dispatch(openAddCommentModal(postId));
+                    openAddCommentModal(postId)(store.dispatch);
                     return;
                 }
             },

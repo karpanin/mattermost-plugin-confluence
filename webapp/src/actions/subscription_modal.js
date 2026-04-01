@@ -77,31 +77,43 @@ export function getPluginConfig() {
     };
 }
 
-export const openSubscriptionModal = () => ({
-    type: Constants.ACTION_TYPES.OPEN_SUBSCRIPTION_MODAL,
-});
+export const openSubscriptionModal = () => (dispatch) => {
+    dispatch({
+        type: Constants.ACTION_TYPES.OPEN_SUBSCRIPTION_MODAL,
+    });
+};
 
-export const closeSubscriptionModal = () => ({
-    type: Constants.ACTION_TYPES.CLOSE_SUBSCRIPTION_MODAL,
-});
+export const closeSubscriptionModal = () => (dispatch) => {
+    dispatch({
+        type: Constants.ACTION_TYPES.CLOSE_SUBSCRIPTION_MODAL,
+    });
+};
 
-export const openCreatePageModal = (postId) => ({
-    type: Constants.ACTION_TYPES.OPEN_CREATE_PAGE_MODAL,
-    data: {postId},
-});
+export const openCreatePageModal = (postId) => (dispatch) => {
+    dispatch({
+        type: Constants.ACTION_TYPES.OPEN_CREATE_PAGE_MODAL,
+        data: {postId},
+    });
+};
 
-export const closeCreatePageModal = () => ({
-    type: Constants.ACTION_TYPES.CLOSE_CREATE_PAGE_MODAL,
-});
+export const closeCreatePageModal = () => (dispatch) => {
+    dispatch({
+        type: Constants.ACTION_TYPES.CLOSE_CREATE_PAGE_MODAL,
+    });
+};
 
-export const openAddCommentModal = (postId) => ({
-    type: Constants.ACTION_TYPES.OPEN_ADD_COMMENT_MODAL,
-    data: {postId},
-});
+export const openAddCommentModal = (postId) => (dispatch) => {
+    dispatch({
+        type: Constants.ACTION_TYPES.OPEN_ADD_COMMENT_MODAL,
+        data: {postId},
+    });
+};
 
-export const closeAddCommentModal = () => ({
-    type: Constants.ACTION_TYPES.CLOSE_ADD_COMMENT_MODAL,
-});
+export const closeAddCommentModal = () => (dispatch) => {
+    dispatch({
+        type: Constants.ACTION_TYPES.CLOSE_ADD_COMMENT_MODAL,
+    });
+};
 
 export const createPageFromPost = (body) => {
     return async () => {

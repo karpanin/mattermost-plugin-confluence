@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -336,13 +337,25 @@ func (p *Plugin) GetCommentDataWithAPIToken(webhookPayload *serializer.Confluenc
 
 	body, statusCode, err := p.MakeHTTPCallWithAPIToken(path)
 	if err != nil || statusCode != http.StatusOK {
-		if statusCode == http.StatusNotFound && webhookPayload.Page.ID != 0 {
-			p.client.Log.Info("Comment lookup by content ID returned 404, trying page descendants fallback",
+		if statusCode == http.StatusNotFound {
+			commentID := strconv.FormatInt(webhookPayload.Comment.ID, 10)
+			if webhookPayload.Page.ID != 0 {
+				p.client.Log.Info("Comment lookup by content ID returned 404, trying page descendants fallback",
+					"comment_id", webhookPayload.Comment.ID,
+					"page_id", webhookPayload.Page.ID,
+					"event", webhookPayload.Event,
+				)
+				return p.GetCommentDataFromPageDescendantsWithAPIToken(strconv.FormatInt(webhookPayload.Page.ID, 10), commentID, pluginConfig)
+			}
+
+			p.client.Log.Info("Comment lookup by content ID returned 404 without page ID, trying content search fallback",
 				"comment_id", webhookPayload.Comment.ID,
-				"page_id", webhookPayload.Page.ID,
 				"event", webhookPayload.Event,
 			)
-			return p.GetCommentDataFromPageDescendantsWithAPIToken(strconv.FormatInt(webhookPayload.Page.ID, 10), strconv.FormatInt(webhookPayload.Comment.ID, 10), pluginConfig)
+			return p.SearchCommentDataByIDWithAPIToken(commentID, pluginConfig)
+		}
+		if err == nil {
+			return nil, fmt.Errorf("unexpected status code %d while fetching comment %d with API token", statusCode, webhookPayload.Comment.ID)
 		}
 		return nil, err
 	}
@@ -382,6 +395,30 @@ func (p *Plugin) GetCommentDataFromPageDescendantsWithAPIToken(pageID, commentID
 	}
 
 	return nil, errors.Errorf("comment %s not found in descendants for page %s", commentID, pageID)
+}
+
+func (p *Plugin) SearchCommentDataByIDWithAPIToken(commentID string, pluginConfig *config.Configuration) (*CommentResponse, error) {
+	response := &CommentSearchResponse{}
+	path := fmt.Sprintf("%s%s?cql=%s&expand=body.view,body.storage,container,space,history&limit=1", pluginConfig.ConfluenceURL, PathContentData+"search", url.QueryEscape("id="+commentID))
+	body, statusCode, err := p.MakeHTTPCallWithAPIToken(path)
+	if err != nil || statusCode != http.StatusOK {
+		if err == nil {
+			return nil, fmt.Errorf("unexpected status code %d while searching comment %s with API token", statusCode, commentID)
+		}
+		return nil, err
+	}
+
+	if err := json.Unmarshal(body, response); err != nil {
+		return nil, errors.Wrapf(err, "error searching comment data with API token")
+	}
+
+	for i := range response.Results {
+		if response.Results[i].ID == commentID {
+			return &response.Results[i], nil
+		}
+	}
+
+	return nil, errors.Errorf("comment %s not found via content search", commentID)
 }
 
 func (p *Plugin) GetPageDataWithAPIToken(pageID int, pluginConfig *config.Configuration) (*PageResponse, error) {

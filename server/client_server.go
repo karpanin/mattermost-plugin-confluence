@@ -262,8 +262,12 @@ func (csc *confluenceServerClient) GetCommentData(webhookPayload *serializer.Con
 	commentResponse := &CommentResponse{}
 	commentPath := fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10))
 	if _, statusCode, err := service.CallJSONWithURL(csc.URL, commentPath, http.MethodGet, nil, commentResponse, csc.HTTPClient); err != nil {
-		if statusCode == http.StatusNotFound && webhookPayload.Page.ID != 0 {
-			return csc.GetCommentDataFromPageDescendants(strconv.FormatInt(webhookPayload.Page.ID, 10), strconv.FormatInt(webhookPayload.Comment.ID, 10))
+		if statusCode == http.StatusNotFound {
+			commentID := strconv.FormatInt(webhookPayload.Comment.ID, 10)
+			if webhookPayload.Page.ID != 0 {
+				return csc.GetCommentDataFromPageDescendants(strconv.FormatInt(webhookPayload.Page.ID, 10), commentID)
+			}
+			return csc.SearchCommentDataByID(commentID)
 		}
 		return nil, err
 	}
@@ -294,6 +298,22 @@ func (csc *confluenceServerClient) GetCommentDataFromPageDescendants(pageID, com
 	}
 
 	return nil, errors.Errorf("comment %s not found in descendants for page %s", commentID, pageID)
+}
+
+func (csc *confluenceServerClient) SearchCommentDataByID(commentID string) (*CommentResponse, error) {
+	path := fmt.Sprintf("%s?cql=%s&expand=body.view,body.storage,container,space,history&limit=1", PathContentData+"search", url.QueryEscape("id="+commentID))
+	response := &CommentSearchResponse{}
+	if _, _, err := service.CallJSONWithURL(csc.URL, path, http.MethodGet, nil, response, csc.HTTPClient); err != nil {
+		return nil, err
+	}
+
+	for i := range response.Results {
+		if response.Results[i].ID == commentID {
+			return &response.Results[i], nil
+		}
+	}
+
+	return nil, errors.Errorf("comment %s not found via content search", commentID)
 }
 
 func getDescendantComments(response *DescendantCommentSearchResponse) []CommentResponse {
