@@ -278,11 +278,6 @@ func (p *Plugin) connectUser(instanceID, mattermostUserID string, connection *ty
 		return err
 	}
 
-	if err = store.StoreConnection(instanceID, AdminMattermostUserID, connection); err != nil {
-		p.client.Log.Error("Error storing connection", "InstanceID", instanceID, "UserID", mattermostUserID, "error", err.Error())
-		return err
-	}
-
 	if err = store.StoreUser(user); err != nil {
 		p.client.Log.Error("Error storing the user", "UserID", user.MattermostUserID, "error", err.Error())
 		return err
@@ -327,12 +322,6 @@ func (p *Plugin) refreshAndStoreToken(connection *types.Connection, instanceID s
 			return nil, err
 		}
 
-		if connection.IsAdmin {
-			if err = store.StoreConnection(instanceID, AdminMattermostUserID, connection); err != nil {
-				p.client.Log.Error("Error storing the connection", "InstanceID", instanceID, "UserID", connection.MattermostUserID, "error", err.Error())
-				return nil, err
-			}
-		}
 		return newToken, nil
 	}
 

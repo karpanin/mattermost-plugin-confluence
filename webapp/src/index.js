@@ -47,7 +47,7 @@ function registerConfluencePostAction(registry, store, text, openModal) {
             }
 
             if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command) {
-                openModal(postId)(store.dispatch);
+                store.dispatch(openModal(postId));
                 return;
             }
 
