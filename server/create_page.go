@@ -122,7 +122,19 @@ func handleCreatePageFromPost(w http.ResponseWriter, r *http.Request, p *Plugin)
 		Body:         formatMattermostPostForConfluence(post.Message, permalink),
 	})
 	if err != nil {
-		http.Error(w, "Failed to create Confluence page.", http.StatusInternalServerError)
+		statusCode := http.StatusInternalServerError
+		message := strings.TrimSpace(err.Error())
+		if message == "" {
+			message = "Failed to create Confluence page."
+		}
+
+		lowerMessage := strings.ToLower(message)
+		if strings.Contains(lowerMessage, "already exists") || strings.Contains(lowerMessage, "same title") {
+			statusCode = http.StatusConflict
+			message = fmt.Sprintf("A Confluence page with the title %q already exists in space %q. Please choose a different title.", req.Title, req.SpaceKey)
+		}
+
+		http.Error(w, message, statusCode)
 		return
 	}
 
