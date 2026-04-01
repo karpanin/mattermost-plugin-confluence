@@ -28,14 +28,14 @@ class PluginClass {
         getSubscriptionAccess()(store.dispatch);
         registry.registerPostDropdownMenuAction({
             text: CreatePageAction,
-            action: (postId) => {
+            action: async (postId) => {
                 const state = store.getState();
                 const post = getPost(state, postId);
                 if (!post || isSystemMessage(post)) {
                     return;
                 }
 
-                const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
+                const subscriptionAccessData = await ensureSubscriptionAccess(store, state);
                 if (!subscriptionAccessData?.is_configured) {
                     return;
                 }
@@ -51,20 +51,20 @@ class PluginClass {
                 const state = store.getState();
                 const post = getPost(state, postId);
                 const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
-                return Boolean(post && !isSystemMessage(post) && subscriptionAccessData?.is_configured);
+                return Boolean(post && !isSystemMessage(post) && subscriptionAccessData?.is_configured !== false);
             },
         });
 
         registry.registerPostDropdownMenuAction({
             text: AddCommentAction,
-            action: (postId) => {
+            action: async (postId) => {
                 const state = store.getState();
                 const post = getPost(state, postId);
                 if (!post || isSystemMessage(post)) {
                     return;
                 }
 
-                const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
+                const subscriptionAccessData = await ensureSubscriptionAccess(store, state);
                 if (!subscriptionAccessData?.is_configured) {
                     return;
                 }
@@ -80,10 +80,20 @@ class PluginClass {
                 const state = store.getState();
                 const post = getPost(state, postId);
                 const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
-                return Boolean(post && !isSystemMessage(post) && subscriptionAccessData?.is_configured);
+                return Boolean(post && !isSystemMessage(post) && subscriptionAccessData?.is_configured !== false);
             },
         });
     }
+}
+
+async function ensureSubscriptionAccess(store, state) {
+    const current = Selectors.getSubscriptionAccess(state);
+    if (Object.keys(current || {}).length > 0) {
+        return current;
+    }
+
+    const response = await getSubscriptionAccess()(store.dispatch);
+    return response.data || Selectors.getSubscriptionAccess(store.getState());
 }
 
 //

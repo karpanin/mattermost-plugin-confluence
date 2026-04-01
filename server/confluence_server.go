@@ -49,107 +49,10 @@ func handleConfluenceServerWebhook(w http.ResponseWriter, r *http.Request, p *Pl
 			return
 		}
 
-		var event *serializer.ConfluenceServerWebhookPayload
-		err = json.Unmarshal(body, &event)
-		if err != nil {
-			p.client.Log.Error("Error occurred while unmarshaling Confluence server webhook payload", "Error", err.Error())
-			http.Error(w, "Failed to unmarshal Confluence server webhook payload", http.StatusInternalServerError)
-			return
-		}
+		w.Header().Set("Content-Type", "application/json")
+		ReturnStatusOK(w)
 
-		pluginConfig := config.GetConfig()
-		instanceID := pluginConfig.ConfluenceURL
-
-		notification := p.getNotification()
-
-		client, _, err := p.GetClientFromUserKey(instanceID, event.UserKey)
-		// If there is an error while retrieving the client from the event user key, it could be due to one of the following reasons:
-		// - An expected error occurred.
-		// - The user who triggered the event in Confluence is not connected to Mattermost.
-		// If the Admin API token is available, we will attempt to fetch additional data using it to send a detailed notification.
-		// Otherwise, a generic notification will be sent.
-		if err != nil {
-			if pluginConfig.AdminAPIToken != "" {
-				p.client.Log.Info("Error getting client for the user who triggered webhook event. Sending notification using admin API token")
-				if strings.Contains(event.Event, Space) {
-					var spaceKey string
-					spaceKey, err = p.GetSpaceKeyFromSpaceIDWithAPIToken(event.Space.ID, pluginConfig)
-					if err != nil {
-						p.client.Log.Error("Error getting space key using space ID with API token", "error", err)
-						http.Error(w, "Failed to send Confluence notification using API Token", http.StatusInternalServerError)
-						return
-					}
-					event.Space.SpaceKey = spaceKey
-				}
-
-				var eventData *ConfluenceServerEvent
-				eventData, err = p.GetEventDataWithAPIToken(event, pluginConfig)
-				if err != nil {
-					p.client.Log.Error("Error getting event data with API token", "error", err)
-					http.Error(w, "Failed to send Confluence notification using API Token", http.StatusInternalServerError)
-					return
-				}
-
-				eventTriggerer, cErr := p.GetUserFromUserKeyWithAPIToken(event.UserKey, pluginConfig)
-				if cErr != nil {
-					p.client.Log.Error("Error getting details of the event triggerer user using API token", "error", cErr.Error())
-					http.Error(w, "Failed to get details of the event triggerer user using API token", http.StatusInternalServerError)
-					return
-				}
-
-				eventData.BaseURL = pluginConfig.ConfluenceURL
-				notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName, event.UserKey)
-			} else {
-				p.client.Log.Info("Error getting client for the user who triggered webhook event. Sending generic notification")
-				notification.SendGenericWHNotification(event, p.BotUserID, pluginConfig.ConfluenceURL)
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			ReturnStatusOK(w)
-			return
-		}
-
-		var spaceKey string
-		if strings.Contains(event.Event, Space) {
-			spaceKey, err = client.(*confluenceServerClient).GetSpaceKeyFromSpaceID(event.Space.ID)
-			if err != nil {
-				p.client.Log.Error("Failed to get Space Key from the Space ID", "Space ID", event.Space.ID, "error", err.Error())
-				http.Error(w, "Failed to send notification for Confluence server webhook", http.StatusInternalServerError)
-				return
-			}
-			event.Space.SpaceKey = spaceKey
-		}
-
-		eventData, err := p.GetEventData(event, client)
-		if err != nil {
-			p.client.Log.Error("Error getting event data for the Confluence server webhook", "error", err.Error())
-			http.Error(w, "Failed to send notification for Confluence server webhook", http.StatusInternalServerError)
-			return
-		}
-
-		eventData.BaseURL = pluginConfig.ConfluenceURL
-
-		// Prefer Admin API Token if available since regular user tokens lack this permission.
-		var eventTriggerer *ConfluenceUser
-		var cErr error
-		if pluginConfig.AdminAPIToken != "" {
-			eventTriggerer, cErr = p.GetUserFromUserKeyWithAPIToken(event.UserKey, pluginConfig)
-			if cErr != nil {
-				p.client.Log.Error("Error getting details of the event triggerer user using API token", "error", cErr.Error())
-				http.Error(w, "Failed to get details of the event triggerer user", http.StatusInternalServerError)
-				return
-			}
-		} else {
-			// Fallback to user's OAuth token if Admin API Token is not configured
-			eventTriggerer, cErr = client.(*confluenceServerClient).GetUserFromUserKey(event.UserKey)
-			if cErr != nil {
-				p.client.Log.Error("Error getting details of the event triggerer user", "error", cErr.Error())
-				http.Error(w, "Failed to get details of the event triggerer user", http.StatusInternalServerError)
-				return
-			}
-		}
-
-		notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName, event.UserKey)
+		go p.processConfluenceServerWebhook(body)
 	} else {
 		event, err := serializer.ConfluenceServerEventFromJSON(r.Body)
 		if err != nil {
@@ -160,9 +63,100 @@ func handleConfluenceServerWebhook(w http.ResponseWriter, r *http.Request, p *Pl
 
 		go service.SendConfluenceNotifications(event, event.Event)
 	}
+}
 
-	w.Header().Set("Content-Type", "application/json")
-	ReturnStatusOK(w)
+func (p *Plugin) processConfluenceServerWebhook(body []byte) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			p.client.Log.Error("Recovered while processing Confluence server webhook", "panic", fmt.Sprintf("%v", recovered))
+		}
+	}()
+
+	var event *serializer.ConfluenceServerWebhookPayload
+	if err := json.Unmarshal(body, &event); err != nil {
+		p.client.Log.Error("Error occurred while unmarshaling Confluence server webhook payload", "Error", err.Error())
+		return
+	}
+
+	pluginConfig := config.GetConfig()
+	instanceID := pluginConfig.ConfluenceURL
+	notification := p.getNotification()
+
+	client, _, err := p.GetClientFromUserKey(instanceID, event.UserKey)
+	// If there is an error while retrieving the client from the event user key, it could be due to one of the following reasons:
+	// - An expected error occurred.
+	// - The user who triggered the event in Confluence is not connected to Mattermost.
+	// If the Admin API token is available, we will attempt to fetch additional data using it to send a detailed notification.
+	// Otherwise, a generic notification will be sent.
+	if err != nil {
+		if pluginConfig.AdminAPIToken != "" {
+			p.client.Log.Info("Error getting client for the user who triggered webhook event. Sending notification using admin API token")
+			if strings.Contains(event.Event, Space) {
+				spaceKey, spaceErr := p.GetSpaceKeyFromSpaceIDWithAPIToken(event.Space.ID, pluginConfig)
+				if spaceErr != nil {
+					p.client.Log.Error("Error getting space key using space ID with API token", "error", spaceErr)
+					return
+				}
+				event.Space.SpaceKey = spaceKey
+			}
+
+			eventData, eventErr := p.GetEventDataWithAPIToken(event, pluginConfig)
+			if eventErr != nil {
+				p.client.Log.Error("Error getting event data with API token", "error", eventErr)
+				return
+			}
+
+			eventTriggerer, triggerErr := p.GetUserFromUserKeyWithAPIToken(event.UserKey, pluginConfig)
+			if triggerErr != nil {
+				p.client.Log.Error("Error getting details of the event triggerer user using API token", "error", triggerErr.Error())
+				return
+			}
+
+			eventData.BaseURL = pluginConfig.ConfluenceURL
+			notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName, event.UserKey)
+			return
+		}
+
+		p.client.Log.Info("Error getting client for the user who triggered webhook event. Sending generic notification")
+		notification.SendGenericWHNotification(event, p.BotUserID, pluginConfig.ConfluenceURL)
+		return
+	}
+
+	if strings.Contains(event.Event, Space) {
+		spaceKey, spaceErr := client.(*confluenceServerClient).GetSpaceKeyFromSpaceID(event.Space.ID)
+		if spaceErr != nil {
+			p.client.Log.Error("Failed to get Space Key from the Space ID", "Space ID", event.Space.ID, "error", spaceErr.Error())
+			return
+		}
+		event.Space.SpaceKey = spaceKey
+	}
+
+	eventData, eventErr := p.GetEventData(event, client)
+	if eventErr != nil {
+		p.client.Log.Error("Error getting event data for the Confluence server webhook", "error", eventErr.Error())
+		return
+	}
+
+	eventData.BaseURL = pluginConfig.ConfluenceURL
+
+	// Prefer Admin API Token if available since regular user tokens lack this permission.
+	var eventTriggerer *ConfluenceUser
+	if pluginConfig.AdminAPIToken != "" {
+		eventTriggerer, err = p.GetUserFromUserKeyWithAPIToken(event.UserKey, pluginConfig)
+		if err != nil {
+			p.client.Log.Error("Error getting details of the event triggerer user using API token", "error", err.Error())
+			return
+		}
+	} else {
+		// Fallback to user's OAuth token if Admin API Token is not configured
+		eventTriggerer, err = client.(*confluenceServerClient).GetUserFromUserKey(event.UserKey)
+		if err != nil {
+			p.client.Log.Error("Error getting details of the event triggerer user", "error", err.Error())
+			return
+		}
+	}
+
+	notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName, event.UserKey)
 }
 
 func (p *Plugin) GetEventData(webhookPayload *serializer.ConfluenceServerWebhookPayload, client Client) (*ConfluenceServerEvent, error) {
