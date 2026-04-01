@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/thoas/go-funk"
 
@@ -222,6 +223,15 @@ func (n *notification) resolvePageMentionedUserIDs(instanceID string, event seri
 	}
 
 	currentUserIDs := n.resolveMattermostUserIDsFromMentionSource(instanceID, getPageMentionSource(serverEvent.Page), eventTriggererKey)
+	if eventType == serializer.PageCreatedEvent && len(currentUserIDs) == 0 {
+		refetchedPage, err := n.refetchCurrentPageForMentions(instanceID, serverEvent, eventTriggererKey)
+		if err != nil {
+			n.API.LogError("Unable to refetch created page for mention notifications", "PageID", serverEvent.Page.ID, "Error", err.Error())
+		} else if refetchedPage != nil {
+			currentUserIDs = n.resolveMattermostUserIDsFromMentionSource(instanceID, getPageMentionSource(refetchedPage), eventTriggererKey)
+			serverEvent.Page = refetchedPage
+		}
+	}
 	if len(currentUserIDs) == 0 {
 		return nil
 	}
@@ -230,6 +240,10 @@ func (n *notification) resolvePageMentionedUserIDs(instanceID string, event seri
 		previousPage, err := n.getPreviousPageForMentions(instanceID, serverEvent, eventTriggererKey)
 		if err != nil {
 			n.API.LogError("Unable to get previous page version for page mention notifications", "PageID", serverEvent.Page.ID, "Error", err.Error())
+			return nil
+		}
+		if previousPage == nil && serverEvent.Page.Version.Number > 1 {
+			return nil
 		}
 
 		previousUserIDs := map[string]struct{}{}
@@ -264,6 +278,51 @@ func (n *notification) getPreviousPageForMentions(instanceID string, event *Conf
 	}
 
 	return n.GetPreviousPageVersionWithAPIToken(event.Page.ID, event.Page.Version.Number, pluginConfig)
+}
+
+func (n *notification) refetchCurrentPageForMentions(instanceID string, event *ConfluenceServerEvent, eventTriggererKey string) (*PageResponse, error) {
+	if event == nil || event.Page == nil || event.Page.ID == "" {
+		return nil, nil
+	}
+
+	delays := []time.Duration{250 * time.Millisecond, 1 * time.Second}
+	for _, delay := range delays {
+		time.Sleep(delay)
+
+		page, err := n.fetchCurrentPageForMentions(instanceID, event.Page.ID, eventTriggererKey)
+		if err != nil {
+			continue
+		}
+		if page == nil {
+			continue
+		}
+		if len(extractMentionIdentifiers(getPageMentionSource(page))) > 0 {
+			return page, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func (n *notification) fetchCurrentPageForMentions(instanceID, pageID, eventTriggererKey string) (*PageResponse, error) {
+	if client, _, err := n.GetClientFromUserKey(instanceID, eventTriggererKey); err == nil {
+		pageIDInt, convErr := strconv.Atoi(pageID)
+		if convErr != nil {
+			return nil, convErr
+		}
+		return client.(*confluenceServerClient).GetPageData(pageIDInt)
+	}
+
+	pluginConfig := config.GetConfig()
+	if pluginConfig.AdminAPIToken == "" {
+		return nil, nil
+	}
+
+	pageIDInt, err := strconv.Atoi(pageID)
+	if err != nil {
+		return nil, err
+	}
+	return n.GetPageDataWithAPIToken(pageIDInt, pluginConfig)
 }
 
 func (n *notification) resolveMattermostUserIDsFromMentionSource(instanceID, body, eventTriggererKey string) map[string]struct{} {
