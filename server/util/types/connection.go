@@ -31,6 +31,7 @@ type Connection struct {
 type ConnectionSettings struct {
 	Notifications          bool            `json:"notifications"`
 	RolesForDMNotification map[string]bool `json:"roles_for_dm_notification,omitempty"`
+	LastSelectedSpaceKey   string          `json:"last_selected_space_key,omitempty"`
 }
 
 func (c *Connection) ConfluenceAccountID() string {

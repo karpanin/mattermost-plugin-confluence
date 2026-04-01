@@ -491,7 +491,7 @@ func (csc *confluenceServerClient) GetContentWatchers(pageID string) ([]Confluen
 
 func (csc *confluenceServerClient) GetAvailableSpaces() ([]SpaceOption, error) {
 	response := &SpaceListResponse{}
-	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s?limit=100&status=current&type=global", PathSpaceData), http.MethodGet, nil, response, csc.HTTPClient); err != nil {
+	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s?limit=100&type=GLOBAL", PathSpaceData), http.MethodGet, nil, response, csc.HTTPClient); err != nil {
 		return nil, err
 	}
 

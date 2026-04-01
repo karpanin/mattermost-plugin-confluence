@@ -8,6 +8,7 @@ import (
 
 	"github.com/mattermost/mattermost-plugin-confluence/server/config"
 	"github.com/mattermost/mattermost-plugin-confluence/server/store"
+	"github.com/mattermost/mattermost-plugin-confluence/server/util/types"
 )
 
 var getCreatePageSpaces = &Endpoint{
@@ -24,8 +25,13 @@ var searchCreatePageParents = &Endpoint{
 	IsAuthenticated: true,
 }
 
+type CreatePageSpacesResponse struct {
+	Spaces               []SpaceOption `json:"spaces"`
+	LastSelectedSpaceKey string        `json:"lastSelectedSpaceKey"`
+}
+
 func handleGetCreatePageSpaces(w http.ResponseWriter, r *http.Request, p *Plugin) {
-	client, err := getCreatePageClient(p, r)
+	client, connection, err := getCreatePageClient(p, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -39,7 +45,14 @@ func handleGetCreatePageSpaces(w http.ResponseWriter, r *http.Request, p *Plugin
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(spaces)
+	lastSelectedSpaceKey := ""
+	if connection != nil && connection.Settings != nil {
+		lastSelectedSpaceKey = connection.Settings.LastSelectedSpaceKey
+	}
+	_ = json.NewEncoder(w).Encode(CreatePageSpacesResponse{
+		Spaces:               spaces,
+		LastSelectedSpaceKey: lastSelectedSpaceKey,
+	})
 }
 
 func handleSearchCreatePageParents(w http.ResponseWriter, r *http.Request, p *Plugin) {
@@ -50,7 +63,7 @@ func handleSearchCreatePageParents(w http.ResponseWriter, r *http.Request, p *Pl
 		return
 	}
 
-	client, err := getCreatePageClient(p, r)
+	client, _, err := getCreatePageClient(p, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
@@ -67,16 +80,38 @@ func handleSearchCreatePageParents(w http.ResponseWriter, r *http.Request, p *Pl
 	_ = json.NewEncoder(w).Encode(pages)
 }
 
-func getCreatePageClient(p *Plugin, r *http.Request) (Client, error) {
+func getCreatePageClient(p *Plugin, r *http.Request) (Client, *types.Connection, error) {
 	userID := r.Header.Get(config.HeaderMattermostUserID)
 	pluginConfig := config.GetConfig()
 	connection, err := store.LoadConnection(pluginConfig.ConfluenceURL, userID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if connection.ConfluenceAccountID() == "" {
-		return nil, errors.New("User not connected. Please use `/confluence connect`.")
+		return nil, nil, errors.New("User not connected. Please use `/confluence connect`.")
 	}
 
-	return p.GetServerClient(pluginConfig.ConfluenceURL, connection)
+	client, err := p.GetServerClient(pluginConfig.ConfluenceURL, connection)
+	if err != nil {
+		return nil, nil, err
+	}
+	return client, connection, nil
+}
+
+func saveLastSelectedSpaceForUser(userID, spaceKey string) error {
+	spaceKey = strings.TrimSpace(spaceKey)
+	if userID == "" || spaceKey == "" {
+		return nil
+	}
+
+	pluginConfig := config.GetConfig()
+	connection, err := store.LoadConnection(pluginConfig.ConfluenceURL, userID)
+	if err != nil {
+		return err
+	}
+
+	ensureConnectionSettings(connection)
+	connection.Settings.LastSelectedSpaceKey = spaceKey
+
+	return store.StoreConnection(pluginConfig.ConfluenceURL, userID, connection)
 }

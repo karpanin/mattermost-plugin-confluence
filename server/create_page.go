@@ -132,6 +132,10 @@ func handleCreatePageFromPost(w http.ResponseWriter, r *http.Request, p *Plugin)
 		threadID = post.RootId
 	}
 
+	if err = saveLastSelectedSpaceForUser(userID, req.SpaceKey); err != nil {
+		p.client.Log.Error("Failed to save last selected Confluence space", "user_id", userID, "space_key", req.SpaceKey, "error", err.Error())
+	}
+
 	if err = publishThreadPost(p, userID, post.ChannelId, threadID, fmt.Sprintf("Created Confluence page: [%s](%s)", createdPage.Title, pageURL)); err != nil {
 		http.Error(w, "Confluence page was created, but publishing the Mattermost thread post failed.", http.StatusInternalServerError)
 		return

@@ -23,8 +23,9 @@ var addCommentToPageFromPost = &Endpoint{
 }
 
 type AddCommentToPageFromPostRequest struct {
-	PostID string `json:"postID"`
-	PageID string `json:"pageID"`
+	PostID   string `json:"postID"`
+	PageID   string `json:"pageID"`
+	SpaceKey string `json:"spaceKey"`
 }
 
 type AddCommentToPageFromPostResponse struct {
@@ -57,6 +58,7 @@ func handleAddCommentToPageFromPost(w http.ResponseWriter, r *http.Request, p *P
 
 	req.PostID = strings.TrimSpace(req.PostID)
 	req.PageID = strings.TrimSpace(req.PageID)
+	req.SpaceKey = strings.TrimSpace(req.SpaceKey)
 	if req.PostID == "" || req.PageID == "" {
 		http.Error(w, "postID and pageID are required.", http.StatusBadRequest)
 		return
@@ -122,6 +124,14 @@ func handleAddCommentToPageFromPost(w http.ResponseWriter, r *http.Request, p *P
 	threadID := post.Id
 	if post.RootId != "" {
 		threadID = post.RootId
+	}
+
+	spaceKey := req.SpaceKey
+	if spaceKey == "" {
+		spaceKey = page.Space.Key
+	}
+	if err = saveLastSelectedSpaceForUser(userID, spaceKey); err != nil {
+		p.client.Log.Error("Failed to save last selected Confluence space", "user_id", userID, "space_key", spaceKey, "error", err.Error())
 	}
 
 	if err = publishThreadPost(p, userID, post.ChannelId, threadID, fmt.Sprintf("Added Confluence comment to [%s](%s)", page.Title, pageURL)); err != nil {

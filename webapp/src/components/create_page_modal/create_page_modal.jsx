@@ -56,9 +56,14 @@ export default class CreatePageModal extends React.PureComponent {
     loadSpaces = async () => {
         this.setState({loadingSpaces: true});
         const response = await this.props.getCreatePageSpaces();
+        const payload = response.data || {};
+        const spaces = Array.isArray(payload.spaces) ? payload.spaces : [];
+        const lastSelectedSpaceKey = payload.lastSelectedSpaceKey;
+        const selectedSpace = spaces.find((space) => space.value === lastSelectedSpaceKey) || null;
         this.setState({
             loadingSpaces: false,
-            spaces: Array.isArray(response.data) ? response.data : [],
+            spaces,
+            selectedSpace,
             error: response.error ? (response.error.response?.text || 'Failed to load Confluence spaces.') : '',
         });
     };
