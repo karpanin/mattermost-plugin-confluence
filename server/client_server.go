@@ -2,10 +2,8 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"html"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,7 +15,6 @@ import (
 	"github.com/yuin/goldmark/extension"
 	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 
-	"github.com/mattermost/mattermost-plugin-confluence/server/config"
 	"github.com/mattermost/mattermost-plugin-confluence/server/serializer"
 	"github.com/mattermost/mattermost-plugin-confluence/server/service"
 	"github.com/mattermost/mattermost-plugin-confluence/server/util/types"
@@ -496,24 +493,9 @@ func (csc *confluenceServerClient) GetContentWatchers(pageID string) ([]Confluen
 func (csc *confluenceServerClient) GetAvailableSpaces() ([]SpaceOption, error) {
 	response := &SpaceListResponse{}
 	path := fmt.Sprintf("%s?limit=100&status=current&type=global", PathSpaceData)
-	body, statusCode, responseHeaders, err := csc.callJSONWithFullDebug(path, response)
-	if err != nil {
-		config.Mattermost.LogError("Confluence spaces request failed",
-			"url", path,
-			"status_code", statusCode,
-			"response_headers", responseHeaders,
-			"response_body", string(body),
-			"error", err.Error(),
-		)
+	if _, _, err := service.CallJSONWithURL(csc.URL, path, http.MethodGet, nil, response, csc.HTTPClient); err != nil {
 		return nil, err
 	}
-
-	config.Mattermost.LogInfo("Confluence spaces request succeeded",
-		"url", path,
-		"status_code", statusCode,
-		"response_headers", responseHeaders,
-		"response_body", string(body),
-	)
 
 	return mapSpaceOptions(response.Results), nil
 }
@@ -563,48 +545,6 @@ func mapSpaceOptions(spaces []SpaceResponse) []SpaceOption {
 	}
 
 	return options
-}
-
-func (csc *confluenceServerClient) callJSONWithFullDebug(path string, out interface{}) ([]byte, int, map[string][]string, error) {
-	endpointURL, err := service.GetEndpointURL(csc.URL, path)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, endpointURL, nil)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-
-	config.Mattermost.LogInfo("Confluence spaces request",
-		"method", req.Method,
-		"url", endpointURL,
-		"request_headers", map[string][]string(req.Header),
-	)
-
-	resp, err := csc.HTTPClient.Do(req)
-	if err != nil {
-		return nil, 0, nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, map[string][]string(resp.Header), err
-	}
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return body, resp.StatusCode, map[string][]string(resp.Header), errors.Errorf("unexpected response status: %d", resp.StatusCode)
-	}
-
-	if out != nil {
-		if err := json.Unmarshal(body, out); err != nil {
-			return body, resp.StatusCode, map[string][]string(resp.Header), err
-		}
-	}
-
-	return body, resp.StatusCode, map[string][]string(resp.Header), nil
 }
 
 func (csc *confluenceServerClient) SearchPages(spaceKey, query string) ([]PageOption, error) {

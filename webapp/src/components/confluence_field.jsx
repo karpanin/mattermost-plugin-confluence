@@ -106,6 +106,19 @@ export default class ConfluenceField extends React.PureComponent {
             );
         }
         let field = null;
+        const normalizedOptions = Array.isArray(options) ? options.map((option) => {
+            if (!option || typeof option !== 'object') {
+                const normalized = String(option ?? '');
+                return {value: normalized, label: normalized};
+            }
+
+            return {
+                ...option,
+                value: String(option.value ?? ''),
+                label: String(option.label ?? option.value ?? ''),
+            };
+        }) : [];
+
         if (fieldType === 'input') {
             field = (
                 <FormControl
@@ -123,7 +136,7 @@ export default class ConfluenceField extends React.PureComponent {
                 <Select
                     name={name}
                     value={value}
-                    options={options}
+                    options={normalizedOptions}
                     isMulti={isMulti}
                     isSearchable={isSearchable}
                     menuPortalTarget={document.body}
@@ -136,6 +149,9 @@ export default class ConfluenceField extends React.PureComponent {
                     noOptionsMessage={noOptionsMessage}
                     inputId={testId}
                     placeholder={placeholder}
+                    getOptionLabel={(option) => String(option?.label ?? '')}
+                    getOptionValue={(option) => String(option?.value ?? '')}
+                    filterOption={onInputChange ? () => true : undefined}
                 />
             );
         }

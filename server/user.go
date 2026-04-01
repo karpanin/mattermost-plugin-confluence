@@ -335,14 +335,6 @@ type UserConnectionInfo struct {
 	IsConfigured              bool `json:"is_configured"`
 }
 
-type DebugOAuthTokenResponse struct {
-	AccessToken  string    `json:"access_token"`
-	TokenType    string    `json:"token_type,omitempty"`
-	RefreshToken string    `json:"refresh_token,omitempty"`
-	Expiry       time.Time `json:"expiry,omitempty"`
-	Scopes       []string  `json:"scopes,omitempty"`
-}
-
 func httpGetUserInfo(w http.ResponseWriter, r *http.Request, p *Plugin) {
 	if r.Method != http.MethodGet {
 		err := errors.New("method " + r.Method + " is not allowed, must be GET")
@@ -406,54 +398,6 @@ func httpGetUserInfo(w http.ResponseWriter, r *http.Request, p *Plugin) {
 	b, _ := json.Marshal(info)
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(b)
-}
-
-func httpGetDebugOAuthToken(w http.ResponseWriter, r *http.Request, p *Plugin) {
-	if r.Method != http.MethodGet {
-		err := errors.New("method " + r.Method + " is not allowed, must be GET")
-		p.client.Log.Error("Invalid HTTP method used in DebugOAuthToken. Error: %s", err.Error())
-		_, _ = respondErr(w, http.StatusMethodNotAllowed, err)
-		return
-	}
-
-	userID := r.Header.Get(config.HeaderMattermostUserID)
-	instanceURL := config.GetConfig().GetConfluenceBaseURL()
-	if instanceURL == "" {
-		http.Error(w, "Missing Confluence base URL.", http.StatusInternalServerError)
-		return
-	}
-
-	connection, err := store.LoadConnection(instanceURL, userID)
-	if err != nil {
-		http.Error(w, "Failed to load user connection.", http.StatusUnauthorized)
-		return
-	}
-
-	oconf, err := p.GetServerOAuth2Config(instanceURL, connection.IsAdmin)
-	if err != nil {
-		http.Error(w, "Failed to load OAuth config.", http.StatusInternalServerError)
-		return
-	}
-
-	token, err := p.refreshAndStoreToken(connection, instanceURL, oconf)
-	if err != nil {
-		http.Error(w, "Failed to refresh OAuth token.", http.StatusInternalServerError)
-		return
-	}
-
-	resp := DebugOAuthTokenResponse{
-		AccessToken:  token.AccessToken,
-		TokenType:    token.TokenType,
-		RefreshToken: token.RefreshToken,
-		Expiry:       token.Expiry,
-	}
-
-	if rawScopes, ok := token.Extra("scope").(string); ok && rawScopes != "" {
-		resp.Scopes = strings.Fields(rawScopes)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (p *Plugin) hasChannelAccess(userID, channelID string) bool {
