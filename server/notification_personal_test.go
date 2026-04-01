@@ -83,8 +83,8 @@ func TestBuildPersonalNotificationMessageForPageMention(t *testing.T) {
 
 	createdMessage := buildPersonalNotificationMessage(notificationTypeMention, serializer.PageCreatedEvent, event, "https://conf.example.com", "Alice")
 	assert.Contains(t, createdMessage, "Alice mentioned you on")
-	assert.Contains(t, createdMessage, "Architecture page")
-	assert.Contains(t, createdMessage, "> @Alice Please review this section.")
+	assert.Contains(t, createdMessage, "[this page](https://conf.example.com/pages/123)")
+	assert.NotContains(t, createdMessage, ">")
 
 	updatedMessage := buildPersonalNotificationMessage(notificationTypeMention, serializer.PageUpdatedEvent, event, "https://conf.example.com", "Alice")
 	assert.Contains(t, updatedMessage, "Alice mentioned you on")

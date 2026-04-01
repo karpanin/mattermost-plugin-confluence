@@ -228,8 +228,15 @@ func (p *Plugin) GetEventData(webhookPayload *serializer.ConfluenceServerWebhook
 func (p *Plugin) GetClientFromUserKey(instanceID, eventUserKey string) (Client, *string, error) {
 	mmUserID, err := store.GetMattermostUserIDFromConfluenceID(instanceID, eventUserKey)
 	if err != nil {
-		p.client.Log.Error("Error getting Mattermost User ID from Confluence ID", "InstanceID", instanceID, "Confluence Account ID", eventUserKey, "error", err.Error())
-		return nil, nil, err
+		mmUserID, err = p.tryRecoverMattermostUserIDFromConfluenceUser(instanceID, eventUserKey)
+		if err != nil {
+			if errors.Cause(err) == store.ErrNotFound {
+				p.client.Log.Info("No Mattermost user mapping found for Confluence user", "InstanceID", instanceID, "Confluence Account ID", eventUserKey)
+			} else {
+				p.client.Log.Error("Error getting Mattermost User ID from Confluence ID", "InstanceID", instanceID, "Confluence Account ID", eventUserKey, "error", err.Error())
+			}
+			return nil, nil, err
+		}
 	}
 
 	connection, err := store.LoadConnection(instanceID, *mmUserID)
@@ -245,6 +252,46 @@ func (p *Plugin) GetClientFromUserKey(instanceID, eventUserKey string) (Client, 
 	}
 
 	return client, mmUserID, nil
+}
+
+func (p *Plugin) tryRecoverMattermostUserIDFromConfluenceUser(instanceID, eventUserKey string) (*string, error) {
+	pluginConfig := config.GetConfig()
+	if pluginConfig.AdminAPIToken == "" {
+		return nil, store.ErrNotFound
+	}
+
+	confluenceUser, err := p.GetUserFromUserKeyWithAPIToken(eventUserKey, pluginConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if confluenceUser == nil || strings.TrimSpace(confluenceUser.Username) == "" {
+		return nil, store.ErrNotFound
+	}
+
+	mmUserID, err := store.GetMattermostUserIDFromConfluenceID(instanceID, confluenceUser.Username)
+	if err != nil {
+		return nil, err
+	}
+
+	connection, err := store.LoadConnection(instanceID, *mmUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	if connection.AccountID == "" {
+		connection.AccountID = eventUserKey
+	}
+	if connection.Name == "" {
+		connection.Name = confluenceUser.Username
+	}
+
+	if storeErr := store.StoreConnection(instanceID, *mmUserID, connection); storeErr != nil {
+		return nil, storeErr
+	}
+
+	p.client.Log.Info("Recovered Mattermost user mapping for Confluence user", "InstanceID", instanceID, "Confluence Account ID", eventUserKey, "Mattermost User ID", *mmUserID)
+	return mmUserID, nil
 }
 
 func (p *Plugin) GetUserFromUserKeyWithAPIToken(eventUserKey string, pluginConfig *config.Configuration) (*ConfluenceUser, error) {

@@ -268,16 +268,21 @@ func (n *notification) getPreviousPageForMentions(instanceID string, event *Conf
 		return nil, nil
 	}
 
-	if client, _, err := n.GetClientFromUserKey(instanceID, eventTriggererKey); err == nil {
-		return client.(*confluenceServerClient).GetPreviousPageVersion(event.Page.ID, event.Page.Version.Number)
+	var lastErr error
+	for _, delay := range []time.Duration{0, 350 * time.Millisecond, 1200 * time.Millisecond} {
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+
+		page, err := n.fetchPreviousPageForMentions(instanceID, event.Page.ID, event.Page.Version.Number, eventTriggererKey)
+		if err == nil {
+			return page, nil
+		}
+
+		lastErr = err
 	}
 
-	pluginConfig := config.GetConfig()
-	if pluginConfig.AdminAPIToken == "" {
-		return nil, nil
-	}
-
-	return n.GetPreviousPageVersionWithAPIToken(event.Page.ID, event.Page.Version.Number, pluginConfig)
+	return nil, lastErr
 }
 
 func (n *notification) refetchCurrentPageForMentions(instanceID string, event *ConfluenceServerEvent, eventTriggererKey string) (*PageResponse, error) {
@@ -323,6 +328,19 @@ func (n *notification) fetchCurrentPageForMentions(instanceID, pageID, eventTrig
 		return nil, err
 	}
 	return n.GetPageDataWithAPIToken(pageIDInt, pluginConfig)
+}
+
+func (n *notification) fetchPreviousPageForMentions(instanceID, pageID string, currentVersion int, eventTriggererKey string) (*PageResponse, error) {
+	if client, _, err := n.GetClientFromUserKey(instanceID, eventTriggererKey); err == nil {
+		return client.(*confluenceServerClient).GetPreviousPageVersion(pageID, currentVersion)
+	}
+
+	pluginConfig := config.GetConfig()
+	if pluginConfig.AdminAPIToken == "" {
+		return nil, nil
+	}
+
+	return n.GetPreviousPageVersionWithAPIToken(pageID, currentVersion, pluginConfig)
 }
 
 func (n *notification) resolveMattermostUserIDsFromMentionSource(instanceID, body, eventTriggererKey string) map[string]struct{} {
@@ -437,13 +455,8 @@ func buildPersonalNotificationMessage(reason, eventType string, event serializer
 		}
 
 		if serverEvent.Page != nil && (eventType == serializer.PageCreatedEvent || eventType == serializer.PageUpdatedEvent) {
-			pageName := serverEvent.GetPageDisplayNameForPageEvents(baseURL)
 			spaceName := serverEvent.GetSpaceDisplayNameForPageEvents(baseURL)
 			pageURL := joinURL(baseURL, serverEvent.Page.Links.Self)
-			pageExcerpt := getPageExcerpt(serverEvent.Page)
-			if pageExcerpt != "" {
-				return fmt.Sprintf("%s mentioned you on %s in %s.\n> %s", eventTriggerer, pageName, spaceName, strings.ReplaceAll(pageExcerpt, "\n", "\n> "))
-			}
 			return fmt.Sprintf("%s mentioned you on [this page](%s) in %s.", eventTriggerer, pageURL, spaceName)
 		}
 
