@@ -14,6 +14,8 @@ export GOCACHE ?= $(PWD)/.cache/go-build
 export GOPATH ?= $(PWD)/.cache/gopath
 export GOMODCACHE ?= $(PWD)/.cache/gomod
 export NPM_CONFIG_CACHE ?= $(PWD)/.cache/npm
+VERSION ?=
+MANIFEST_ENV = BUILD_VERSION_OVERRIDE=$(VERSION)
 
 # We need to export GOBIN to allow it to be set
 # for processes spawned from the Makefile
@@ -177,7 +179,7 @@ all: check-style test dist
 ## Propagates plugin manifest information into the server/ and webapp/ folders.
 .PHONY: apply
 apply:
-	./build/bin/manifest apply
+	$(MANIFEST_ENV) ./build/bin/manifest apply
 
 ## Install go tools
 install-go-tools:
@@ -247,7 +249,7 @@ endif
 bundle:
 	rm -rf dist/
 	mkdir -p dist/$(PLUGIN_ID)
-	./build/bin/manifest dist
+	$(MANIFEST_ENV) ./build/bin/manifest dist
 ifneq ($(wildcard $(ASSETS_DIR)/.),)
 	cp -r $(ASSETS_DIR) dist/$(PLUGIN_ID)/
 endif
@@ -300,7 +302,7 @@ ifeq ($(strip $(TARGET_GOARCH)),)
 endif
 	rm -rf dist/
 	mkdir -p dist/$(PLUGIN_ID)
-	./build/bin/manifest dist
+	$(MANIFEST_ENV) ./build/bin/manifest dist
 ifneq ($(wildcard $(ASSETS_DIR)/.),)
 	cp -r $(ASSETS_DIR) dist/$(PLUGIN_ID)/
 endif

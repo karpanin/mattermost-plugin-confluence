@@ -133,6 +133,10 @@ func findManifest() (*model.Manifest, error) {
 		manifest.Version = strings.TrimPrefix(version, "v")
 	}
 
+	if overrideVersion := strings.TrimSpace(os.Getenv("BUILD_VERSION_OVERRIDE")); overrideVersion != "" {
+		manifest.Version = strings.TrimPrefix(overrideVersion, "v")
+	}
+
 	// If no release notes specified, generate one from the latest tag, if present.
 	if manifest.ReleaseNotesURL == "" && BuildTagLatest != "" {
 		manifest.ReleaseNotesURL, err = url.JoinPath(manifest.HomepageURL, "releases", "tag", BuildTagLatest)

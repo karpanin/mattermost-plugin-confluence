@@ -455,9 +455,13 @@ func buildPersonalNotificationMessage(reason, eventType string, event serializer
 		}
 
 		if serverEvent.Page != nil && (eventType == serializer.PageCreatedEvent || eventType == serializer.PageUpdatedEvent) {
+			pageName := serverEvent.GetPageDisplayNameForPageEvents(baseURL)
 			spaceName := serverEvent.GetSpaceDisplayNameForPageEvents(baseURL)
 			pageURL := joinURL(baseURL, serverEvent.Page.Links.Self)
-			return fmt.Sprintf("%s mentioned you on [this page](%s) in %s.", eventTriggerer, pageURL, spaceName)
+			if pageName == "" {
+				return fmt.Sprintf("%s mentioned you on [this page](%s) in %s.", eventTriggerer, pageURL, spaceName)
+			}
+			return fmt.Sprintf("%s mentioned you on %s in %s.", eventTriggerer, pageName, spaceName)
 		}
 
 		return ""

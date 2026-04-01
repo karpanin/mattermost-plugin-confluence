@@ -133,6 +133,12 @@ Shortcut for Linux x64:
 make dist-linux-amd64
 ```
 
+To force a specific plugin version at build time without editing `plugin.json`, pass `VERSION`:
+
+```bash
+make dist-linux-amd64 VERSION=2.0.0
+```
+
 This produces only the `linux-amd64` server binary in the archive instead of bundling binaries for every platform.
 
 ### Upload the built plugin to Mattermost
@@ -183,3 +189,9 @@ The version of a plugin is determined at compile time, automatically populating 
 * If there is no version tag, an empty version will be combined with the short hash, e.g. `0.0.0+76081421`.
 
 To disable this behaviour, manually populate and maintain the `version` field.
+
+You can also override the build version without changing `plugin.json`:
+
+```bash
+make dist-linux-amd64 VERSION=2.0.0
+```

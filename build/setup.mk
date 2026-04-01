@@ -22,7 +22,7 @@ ifeq ($(PLUGIN_ID),)
 endif
 
 # Extract the plugin version from the manifest.
-PLUGIN_VERSION ?= $(shell build/bin/manifest version)
+PLUGIN_VERSION ?= $(shell BUILD_VERSION_OVERRIDE="$(VERSION)" build/bin/manifest version)
 ifeq ($(PLUGIN_VERSION),)
     $(error "Cannot parse version from $(MANIFEST_FILE)")
 endif
