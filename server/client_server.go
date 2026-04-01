@@ -13,9 +13,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
-	goldmarkhtml "github.com/yuin/goldmark/renderer/html"
 
 	"github.com/mattermost/mattermost-plugin-confluence/server/serializer"
 	"github.com/mattermost/mattermost-plugin-confluence/server/service"
@@ -636,43 +633,32 @@ func (csc *confluenceServerClient) SearchPages(spaceKey, query string) ([]PageOp
 }
 
 func formatMattermostPostForConfluence(postMessage, permalink string) string {
+	return formatMattermostPostForConfluenceLegacy(postMessage, permalink)
+}
+
+func formatMattermostPostForConfluenceLegacy(postMessage, permalink string) string {
 	message := strings.TrimSpace(postMessage)
 	if message == "" {
 		message = "_Original Mattermost message did not contain text._"
 	}
 
-	renderer := goldmark.New(
-		goldmark.WithExtensions(
-			extension.GFM,
-			extension.Linkify,
-			extension.Strikethrough,
-			extension.Table,
-			extension.TaskList,
-		),
-		goldmark.WithRendererOptions(
-			goldmarkhtml.WithHardWraps(),
-		),
-	)
-
-	var out bytes.Buffer
-	if err := renderer.Convert([]byte(message), &out); err != nil {
-		fallback := strings.Split(message, "\n")
-		paragraphs := make([]string, 0, len(fallback))
-		for _, line := range fallback {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			paragraphs = append(paragraphs, "<p>"+html.EscapeString(line)+"</p>")
+	lines := strings.Split(message, "\n")
+	paragraphs := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
 		}
-		if len(paragraphs) == 0 {
-			paragraphs = append(paragraphs, "<p><em>Original Mattermost message did not contain text.</em></p>")
-		}
-		out.WriteString(strings.Join(paragraphs, ""))
+		paragraphs = append(paragraphs, "<p>"+html.EscapeString(line)+"</p>")
 	}
 
-	out.WriteString(fmt.Sprintf("<p><a href=\"%s\">View original message in Mattermost</a></p>", html.EscapeString(permalink)))
-	return out.String()
+	if len(paragraphs) == 0 {
+		paragraphs = append(paragraphs, "<p><em>Original Mattermost message did not contain text.</em></p>")
+	}
+
+	paragraphs = append(paragraphs, fmt.Sprintf("<p><a href=\"%s\">View original message in Mattermost</a></p>", html.EscapeString(permalink)))
+
+	return strings.Join(paragraphs, "")
 }
 
 func escapeCQL(value string) string {
