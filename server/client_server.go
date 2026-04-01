@@ -453,7 +453,7 @@ func (csc *confluenceServerClient) CreatePage(in *CreatePageInput) (*CreatedPage
 	}
 
 	created := &CreatedPage{}
-	if _, _, err := service.CallJSONWithURL(csc.URL, PathContentData, http.MethodPost, payload, created, csc.HTTPClient); err != nil {
+	if _, _, err := csc.callJSONWithAcceptHeaderAndBody(http.MethodPost, PathContentData, payload, created); err != nil {
 		return nil, err
 	}
 
@@ -550,16 +550,32 @@ func mapSpaceOptions(spaces []SpaceResponse) []SpaceOption {
 }
 
 func (csc *confluenceServerClient) callJSONWithAcceptHeader(path string, out interface{}) ([]byte, int, error) {
+	return csc.callJSONWithAcceptHeaderAndBody(http.MethodGet, path, nil, out)
+}
+
+func (csc *confluenceServerClient) callJSONWithAcceptHeaderAndBody(method, path string, in, out interface{}) ([]byte, int, error) {
 	endpointURL, err := service.GetEndpointURL(csc.URL, path)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	req, err := http.NewRequest(http.MethodGet, endpointURL, nil)
+	var inBody io.Reader
+	if in != nil {
+		buf := &bytes.Buffer{}
+		if err := json.NewEncoder(buf).Encode(in); err != nil {
+			return nil, 0, err
+		}
+		inBody = buf
+	}
+
+	req, err := http.NewRequest(method, endpointURL, inBody)
 	if err != nil {
 		return nil, 0, errors.Wrap(err, "failed to create request")
 	}
 	req.Header.Set("Accept", "application/json")
+	if in != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	resp, err := csc.HTTPClient.Do(req)
 	if err != nil {
