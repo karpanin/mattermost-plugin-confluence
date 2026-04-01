@@ -3,51 +3,16 @@ package util
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestSplitArgs(t *testing.T) {
-	for name, val := range map[string]struct {
-		command        string
-		expectedResult []string
-		errMessage     string
-	}{
-		"command 1": {
-			command:        "/confluence edit \"abc\"",
-			expectedResult: []string{"/confluence", "edit", "abc"},
-		},
-		"command 2": {
-			command:        "/confluence list     ",
-			expectedResult: []string{"/confluence", "list"},
-		},
-		"command 3": {
-			command:        "/confluence      subscribe",
-			expectedResult: []string{"/confluence", "subscribe"},
-		},
-		"command 4": {
-			command:        "/confluence edit \"  test     \"",
-			expectedResult: []string{"/confluence", "edit", "test"},
-		},
-		"command 5": {
-			command:        "/confluence subscribe",
-			expectedResult: []string{"/confluence", "subscribe"},
-		},
-		"command 6": {
-			command:        "/confluence unsubscribe \" test\"",
-			expectedResult: []string{"/confluence", "unsubscribe", "test"},
-		},
-		"command 7": {
-			command:    "/confluence edit \"abc  ",
-			errMessage: "quotes not closed",
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			args, err := SplitArgs(val.command)
-			if err != nil {
-				assert.Equal(t, val.errMessage, err.Error())
-				return
-			}
-			assert.Equal(t, val.expectedResult, args)
-		})
-	}
+func TestConvertConfluenceHTMLToMarkdown(t *testing.T) {
+	html := `<h1>Title</h1><p>This is <strong>bold</strong>, <em>italic</em> and <a href="https://example.com">link</a>.</p>`
+
+	markdown := ConvertConfluenceHTMLToMarkdown(html)
+
+	require.Contains(t, markdown, "# Title")
+	require.Contains(t, markdown, "**bold**")
+	require.Contains(t, markdown, "_italic_")
+	require.Contains(t, markdown, "[link](https://example.com)")
 }

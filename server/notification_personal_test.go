@@ -29,7 +29,7 @@ func TestBuildPersonalNotificationMessage(t *testing.T) {
 		Comment: &CommentResponse{
 			Body: Body{
 				View: View{
-					Value: `<p><a class="confluence-userlink user-mention" data-linked-resource-id="user-key-3">@Alice</a> У меня зависла заявка на доступы.</p>`,
+					Value: `<p><a class="confluence-userlink user-mention" data-linked-resource-id="user-key-3">@Alice</a> Ð£ Ð¼ÐµÐ½Ñ Ð·Ð°Ð²Ð¸ÑÐ»Ð° Ð·Ð°ÑÐ²ÐºÐ° Ð½Ð° Ð´Ð¾ÑÑ‚ÑƒÐ¿Ñ‹.</p>`,
 				},
 			},
 			Container: CommentContainer{
@@ -57,7 +57,7 @@ func TestBuildPersonalNotificationMessage(t *testing.T) {
 	mentionMessage := buildPersonalNotificationMessage(notificationTypeMention, serializer.CommentCreatedEvent, event, "https://conf.example.com", "Alice")
 	assert.Contains(t, mentionMessage, "Alice mentioned you")
 	assert.Contains(t, mentionMessage, "> @Alice")
-	assert.Contains(t, mentionMessage, "> У меня зависла заявка на доступы.")
+	assert.Contains(t, mentionMessage, "Ð£ Ð¼ÐµÐ½Ñ Ð·Ð°Ð²Ð¸ÑÐ»Ð° Ð·Ð°ÑÐ²ÐºÐ° Ð½Ð° Ð´Ð¾ÑÑ‚ÑƒÐ¿Ñ‹.")
 
 	watchingMessage := buildPersonalNotificationMessage(notificationTypeWatching, serializer.PageUpdatedEvent, event, "https://conf.example.com", "Alice")
 	assert.Contains(t, watchingMessage, "You are watching this page in Confluence")

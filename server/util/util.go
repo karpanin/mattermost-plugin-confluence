@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	md "github.com/JohannesKaufmann/html-to-markdown"
 	html "golang.org/x/net/html"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -117,6 +118,28 @@ func Deduplicate(a []string) []string {
 }
 
 func GetBodyForExcerpt(htmlBodyValue string) string {
+	if markdown := strings.TrimSpace(ConvertConfluenceHTMLToMarkdown(htmlBodyValue)); markdown != "" {
+		return markdown
+	}
+
+	return extractTextFromHTML(htmlBodyValue)
+}
+
+func ConvertConfluenceHTMLToMarkdown(htmlBodyValue string) string {
+	if strings.TrimSpace(htmlBodyValue) == "" {
+		return ""
+	}
+
+	converter := md.NewConverter("", true, nil)
+	markdown, err := converter.ConvertString(htmlBodyValue)
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(markdown)
+}
+
+func extractTextFromHTML(htmlBodyValue string) string {
 	var str string
 	domDoc := html.NewTokenizer(strings.NewReader(htmlBodyValue))
 	var previousStartToken html.Token

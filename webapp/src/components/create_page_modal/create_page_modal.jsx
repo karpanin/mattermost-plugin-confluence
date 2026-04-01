@@ -25,6 +25,7 @@ export default class CreatePageModal extends React.PureComponent {
     static propTypes = {
         modalState: PropTypes.object.isRequired,
         post: PropTypes.object,
+        theme: PropTypes.object,
         close: PropTypes.func.isRequired,
         createPageFromPost: PropTypes.func.isRequired,
         getCreatePageSpaces: PropTypes.func.isRequired,
@@ -33,6 +34,7 @@ export default class CreatePageModal extends React.PureComponent {
 
     static defaultProps = {
         post: null,
+        theme: null,
     };
 
     constructor(props) {
@@ -160,6 +162,21 @@ export default class CreatePageModal extends React.PureComponent {
     render() {
         const visible = Boolean(this.props.modalState.postId);
         const {saving, error, loadingSpaces, loadingParents} = this.state;
+        const theme = this.props.theme || {};
+        const modalStyles = {
+            header: {
+                color: theme.centerChannelColor,
+                backgroundColor: theme.centerChannelBg,
+            },
+            body: {
+                color: theme.centerChannelColor,
+                backgroundColor: theme.centerChannelBg,
+            },
+            footer: {
+                color: theme.centerChannelColor,
+                backgroundColor: theme.centerChannelBg,
+            },
+        };
 
         return (
             <Modal
@@ -167,10 +184,10 @@ export default class CreatePageModal extends React.PureComponent {
                 onHide={this.handleClose}
                 backdrop={'static'}
             >
-                <Modal.Header closeButton={true}>
+                <Modal.Header closeButton={true} style={modalStyles.header}>
                     <Modal.Title>{'Create Confluence Page'}</Modal.Title>
                 </Modal.Header>
-                <Modal.Body>
+                <Modal.Body style={modalStyles.body}>
                     <ConfluenceField
                         label={'Title'}
                         type={'text'}
@@ -178,6 +195,7 @@ export default class CreatePageModal extends React.PureComponent {
                         required={true}
                         placeholder={'Enter the Confluence page title.'}
                         value={this.state.title}
+                        theme={theme}
                         addValidation={this.validator.addValidation}
                         removeValidation={this.validator.removeValidation}
                         onChange={this.handleChange('title')}
@@ -189,6 +207,7 @@ export default class CreatePageModal extends React.PureComponent {
                         placeholder={'Select a Confluence space.'}
                         value={this.state.selectedSpace}
                         options={this.state.spaces}
+                        theme={theme}
                         isSearchable={true}
                         isMulti={false}
                         addValidation={this.validator.addValidation}
@@ -204,6 +223,7 @@ export default class CreatePageModal extends React.PureComponent {
                         placeholder={this.state.selectedSpace ? 'Search parent page by title.' : 'Select a space first.'}
                         value={this.state.selectedParentPage}
                         options={this.state.parentPageOptions}
+                        theme={theme}
                         isSearchable={true}
                         isMulti={false}
                         addValidation={this.validator.addValidation}
@@ -232,7 +252,7 @@ export default class CreatePageModal extends React.PureComponent {
                         </p>
                     )}
                 </Modal.Body>
-                <Modal.Footer>
+                <Modal.Footer style={modalStyles.footer}>
                     <Button
                         type='button'
                         bsStyle='link'

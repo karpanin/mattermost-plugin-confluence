@@ -3,11 +3,13 @@ module github.com/mattermost/mattermost-plugin-confluence
 go 1.25.0
 
 require (
+	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/mattermost/mattermost/server/public v0.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.11.1
 	github.com/thoas/go-funk v0.9.3
+	github.com/yuin/goldmark v1.7.13
 	go.uber.org/atomic v1.11.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/net v0.51.0
@@ -15,6 +17,8 @@ require (
 )
 
 require (
+	github.com/PuerkitoBio/goquery v1.10.3 // indirect
+	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/beevik/etree v1.6.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

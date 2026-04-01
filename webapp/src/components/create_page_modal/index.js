@@ -1,6 +1,7 @@
 import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
 import {getPost} from 'mattermost-redux/selectors/entities/posts';
+import {getTheme} from 'mattermost-redux/selectors/entities/preferences';
 
 import {closeCreatePageModal, createPageFromPost, getCreatePageSpaces, searchCreatePageParents} from '../../actions';
 import Selectors from '../../selectors';
@@ -13,6 +14,7 @@ const mapStateToProps = (state) => {
     return {
         modalState,
         post: modalState.postId ? getPost(state, modalState.postId) : null,
+        theme: getTheme(state),
     };
 };
 

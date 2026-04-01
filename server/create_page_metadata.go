@@ -33,7 +33,8 @@ func handleGetCreatePageSpaces(w http.ResponseWriter, r *http.Request, p *Plugin
 
 	spaces, err := client.GetAvailableSpaces()
 	if err != nil {
-		http.Error(w, "Failed to load Confluence spaces.", http.StatusInternalServerError)
+		p.client.Log.Error("Failed to load Confluence spaces", "error", err.Error())
+		http.Error(w, "Failed to load Confluence spaces: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -57,7 +58,8 @@ func handleSearchCreatePageParents(w http.ResponseWriter, r *http.Request, p *Pl
 
 	pages, err := client.SearchPages(spaceKey, query)
 	if err != nil {
-		http.Error(w, "Failed to search Confluence pages.", http.StatusInternalServerError)
+		p.client.Log.Error("Failed to search Confluence pages", "space_key", spaceKey, "query", query, "error", err.Error())
+		http.Error(w, "Failed to search Confluence pages: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 

@@ -24,6 +24,7 @@ export default class AddCommentModal extends React.PureComponent {
     static propTypes = {
         modalState: PropTypes.object.isRequired,
         post: PropTypes.object,
+        theme: PropTypes.object,
         close: PropTypes.func.isRequired,
         addCommentToPageFromPost: PropTypes.func.isRequired,
         getCreatePageSpaces: PropTypes.func.isRequired,
@@ -32,6 +33,7 @@ export default class AddCommentModal extends React.PureComponent {
 
     static defaultProps = {
         post: null,
+        theme: null,
     };
 
     constructor(props) {
@@ -140,6 +142,21 @@ export default class AddCommentModal extends React.PureComponent {
     render() {
         const visible = Boolean(this.props.modalState.postId);
         const {saving, error, loadingSpaces, loadingPages} = this.state;
+        const theme = this.props.theme || {};
+        const modalStyles = {
+            header: {
+                color: theme.centerChannelColor,
+                backgroundColor: theme.centerChannelBg,
+            },
+            body: {
+                color: theme.centerChannelColor,
+                backgroundColor: theme.centerChannelBg,
+            },
+            footer: {
+                color: theme.centerChannelColor,
+                backgroundColor: theme.centerChannelBg,
+            },
+        };
 
         return (
             <Modal
@@ -147,10 +164,10 @@ export default class AddCommentModal extends React.PureComponent {
                 onHide={this.handleClose}
                 backdrop={'static'}
             >
-                <Modal.Header closeButton={true}>
+                <Modal.Header closeButton={true} style={modalStyles.header}>
                     <Modal.Title>{'Add Comment to Confluence Page'}</Modal.Title>
                 </Modal.Header>
-                <Modal.Body>
+                <Modal.Body style={modalStyles.body}>
                     <ConfluenceField
                         label={'Space'}
                         fieldType={'dropDown'}
@@ -158,6 +175,7 @@ export default class AddCommentModal extends React.PureComponent {
                         placeholder={'Select a Confluence space.'}
                         value={this.state.selectedSpace}
                         options={this.state.spaces}
+                        theme={theme}
                         isSearchable={true}
                         isMulti={false}
                         addValidation={this.validator.addValidation}
@@ -173,6 +191,7 @@ export default class AddCommentModal extends React.PureComponent {
                         placeholder={this.state.selectedSpace ? 'Search page by title.' : 'Select a space first.'}
                         value={this.state.selectedPage}
                         options={this.state.pageOptions}
+                        theme={theme}
                         isSearchable={true}
                         isMulti={false}
                         addValidation={this.validator.addValidation}
@@ -201,7 +220,7 @@ export default class AddCommentModal extends React.PureComponent {
                         </p>
                     )}
                 </Modal.Body>
-                <Modal.Footer>
+                <Modal.Footer style={modalStyles.footer}>
                     <Button
                         type='button'
                         bsStyle='link'
