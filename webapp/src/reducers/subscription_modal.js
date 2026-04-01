@@ -41,3 +41,25 @@ export const createPageModal = (state = {}, action) => {
         return state;
     }
 };
+
+export const addCommentModal = (state = {}, action) => {
+    switch (action.type) {
+    case Constants.ACTION_TYPES.OPEN_ADD_COMMENT_MODAL:
+        return {
+            postId: action.data.postId,
+        };
+    case Constants.ACTION_TYPES.CLOSE_ADD_COMMENT_MODAL:
+        return {};
+    default:
+        return state;
+    }
+};
+
+export const subscriptionAccess = (state = {}, action) => {
+    switch (action.type) {
+    case Constants.ACTION_TYPES.RECEIVED_SUBSCRIPTION_ACCESS:
+        return action.data || {};
+    default:
+        return state;
+    }
+};

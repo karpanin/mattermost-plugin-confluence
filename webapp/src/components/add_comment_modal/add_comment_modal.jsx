@@ -9,24 +9,23 @@ import ConfluenceField from '../confluence_field';
 import Validator from '../validator';
 
 const initialState = {
-    title: '',
     selectedSpace: null,
-    selectedParentPage: null,
-    parentPageQuery: '',
+    selectedPage: null,
+    pageQuery: '',
     spaces: [],
-    parentPageOptions: [],
+    pageOptions: [],
     error: '',
     saving: false,
     loadingSpaces: false,
-    loadingParents: false,
+    loadingPages: false,
 };
 
-export default class CreatePageModal extends React.PureComponent {
+export default class AddCommentModal extends React.PureComponent {
     static propTypes = {
         modalState: PropTypes.object.isRequired,
         post: PropTypes.object,
         close: PropTypes.func.isRequired,
-        createPageFromPost: PropTypes.func.isRequired,
+        addCommentToPageFromPost: PropTypes.func.isRequired,
         getCreatePageSpaces: PropTypes.func.isRequired,
         searchCreatePageParents: PropTypes.func.isRequired,
     };
@@ -39,15 +38,12 @@ export default class CreatePageModal extends React.PureComponent {
         super(props);
         this.state = initialState;
         this.validator = new Validator();
-        this.parentSearchRequest = 0;
+        this.pageSearchRequest = 0;
     }
 
     componentDidUpdate(prevProps) {
         if (this.props.modalState.postId && this.props.modalState.postId !== prevProps.modalState.postId) {
-            this.setState({
-                ...initialState,
-                title: this.getDefaultTitle(),
-            }, this.loadSpaces);
+            this.setState(initialState, this.loadSpaces);
         }
     }
 
@@ -61,69 +57,55 @@ export default class CreatePageModal extends React.PureComponent {
         });
     };
 
-    getDefaultTitle = () => {
-        const message = this.props.post?.message || '';
-        const firstLine = message.split('\n').find((line) => line.trim());
-        if (!firstLine) {
-            return 'Mattermost note';
-        }
-
-        return firstLine.trim().slice(0, 80);
-    };
-
     handleClose = (e) => {
         if (e && e.preventDefault) {
             e.preventDefault();
         }
 
-        this.parentSearchRequest += 1;
+        this.pageSearchRequest += 1;
         this.setState(initialState, this.props.close);
     };
 
-    handleChange = (key) => (e) => {
-        this.setState({[key]: e.target.value});
-    };
-
     handleSpaceChange = (selectedSpace) => {
-        this.parentSearchRequest += 1;
+        this.pageSearchRequest += 1;
         this.setState({
             selectedSpace,
-            selectedParentPage: null,
-            parentPageOptions: [],
-            parentPageQuery: '',
+            selectedPage: null,
+            pageOptions: [],
+            pageQuery: '',
             error: '',
         });
     };
 
-    handleParentPageChange = (selectedParentPage) => {
-        this.setState({selectedParentPage});
+    handlePageChange = (selectedPage) => {
+        this.setState({selectedPage});
     };
 
-    handleParentPageSearch = async (query, meta) => {
+    handlePageSearch = async (query, meta) => {
         if (meta?.action && meta.action !== 'input-change') {
             return query;
         }
 
-        this.setState({parentPageQuery: query, error: ''});
+        this.setState({pageQuery: query, error: ''});
         if (!this.state.selectedSpace || !query || query.trim().length < 2) {
             this.setState({
-                parentPageOptions: [],
-                loadingParents: false,
+                pageOptions: [],
+                loadingPages: false,
             });
             return query;
         }
 
-        const requestID = this.parentSearchRequest + 1;
-        this.parentSearchRequest = requestID;
-        this.setState({loadingParents: true});
+        const requestID = this.pageSearchRequest + 1;
+        this.pageSearchRequest = requestID;
+        this.setState({loadingPages: true});
         const response = await this.props.searchCreatePageParents(this.state.selectedSpace.value, query.trim());
-        if (requestID !== this.parentSearchRequest) {
+        if (requestID !== this.pageSearchRequest) {
             return query;
         }
 
         this.setState({
-            loadingParents: false,
-            parentPageOptions: Array.isArray(response.data) ? response.data : [],
+            loadingPages: false,
+            pageOptions: Array.isArray(response.data) ? response.data : [],
             error: response.error ? (response.error.response?.text || 'Failed to search Confluence pages.') : '',
         });
         return query;
@@ -139,17 +121,15 @@ export default class CreatePageModal extends React.PureComponent {
             error: '',
         });
 
-        const response = await this.props.createPageFromPost({
+        const response = await this.props.addCommentToPageFromPost({
             postID: this.props.modalState.postId,
-            title: this.state.title.trim(),
-            spaceKey: this.state.selectedSpace?.value,
-            parentPageID: this.state.selectedParentPage?.value || '',
+            pageID: this.state.selectedPage?.value,
         });
 
         if (response.error) {
             this.setState({
                 saving: false,
-                error: response.error.response?.text || 'Failed to create Confluence page.',
+                error: response.error.response?.text || 'Failed to add Confluence comment.',
             });
             return;
         }
@@ -159,7 +139,7 @@ export default class CreatePageModal extends React.PureComponent {
 
     render() {
         const visible = Boolean(this.props.modalState.postId);
-        const {saving, error, loadingSpaces, loadingParents} = this.state;
+        const {saving, error, loadingSpaces, loadingPages} = this.state;
 
         return (
             <Modal
@@ -168,20 +148,9 @@ export default class CreatePageModal extends React.PureComponent {
                 backdrop={'static'}
             >
                 <Modal.Header closeButton={true}>
-                    <Modal.Title>{'Create Confluence Page'}</Modal.Title>
+                    <Modal.Title>{'Add Comment to Confluence Page'}</Modal.Title>
                 </Modal.Header>
                 <Modal.Body>
-                    <ConfluenceField
-                        label={'Title'}
-                        type={'text'}
-                        fieldType={'input'}
-                        required={true}
-                        placeholder={'Enter the Confluence page title.'}
-                        value={this.state.title}
-                        addValidation={this.validator.addValidation}
-                        removeValidation={this.validator.removeValidation}
-                        onChange={this.handleChange('title')}
-                    />
                     <ConfluenceField
                         label={'Space'}
                         fieldType={'dropDown'}
@@ -198,28 +167,28 @@ export default class CreatePageModal extends React.PureComponent {
                         noOptionsMessage={() => loadingSpaces ? 'Loading spaces...' : 'No available spaces found.'}
                     />
                     <ConfluenceField
-                        label={'Parent Page'}
+                        label={'Page'}
                         fieldType={'dropDown'}
-                        required={false}
-                        placeholder={this.state.selectedSpace ? 'Search parent page by title.' : 'Select a space first.'}
-                        value={this.state.selectedParentPage}
-                        options={this.state.parentPageOptions}
+                        required={true}
+                        placeholder={this.state.selectedSpace ? 'Search page by title.' : 'Select a space first.'}
+                        value={this.state.selectedPage}
+                        options={this.state.pageOptions}
                         isSearchable={true}
                         isMulti={false}
                         addValidation={this.validator.addValidation}
                         removeValidation={this.validator.removeValidation}
-                        onChange={this.handleParentPageChange}
-                        onInputChange={this.handleParentPageSearch}
+                        onChange={this.handlePageChange}
+                        onInputChange={this.handlePageSearch}
                         isDisabled={!this.state.selectedSpace}
-                        isLoading={loadingParents}
+                        isLoading={loadingPages}
                         noOptionsMessage={() => {
                             if (!this.state.selectedSpace) {
                                 return 'Select a space first.';
                             }
-                            if (this.state.parentPageQuery.trim().length < 2) {
+                            if (this.state.pageQuery.trim().length < 2) {
                                 return 'Type at least 2 characters to search.';
                             }
-                            if (loadingParents) {
+                            if (loadingPages) {
                                 return 'Searching pages...';
                             }
                             return 'No matching pages found.';
@@ -247,7 +216,7 @@ export default class CreatePageModal extends React.PureComponent {
                         disabled={saving}
                     >
                         {saving && <span className='fa fa-spinner fa-fw fa-pulse spinner'/>}
-                        {'Create Page'}
+                        {'Add Comment'}
                     </Button>
                 </Modal.Footer>
             </Modal>

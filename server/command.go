@@ -38,6 +38,7 @@ const (
 		"* `/confluence unsubscribe \"<name>\"` - Unsubscribe the current channel from notifications associated with the given subscription name.\n" +
 		"* `/confluence list` - List all subscriptions for the current channel.\n" +
 		"* `/confluence edit \"<name>\"` - Edit the subscription settings associated with the given subscription name.\n" +
+		"* `/confluence settings notifications [on|off]` - Enable or disable all personal Confluence DM notifications.\n" +
 		"* `/confluence settings notifications [mention|watching] [on|off]` - Manage personal Confluence DM notifications.\n"
 
 	sysAdminHelpText = "\n###### For System Administrators:\n" +
@@ -75,14 +76,14 @@ Once these steps are completed, your Confluence Cloud instance is fully configur
 
 var ConfluenceCommandHandler = Handler{
 	handlers: map[string]HandlerFunc{
-		"list":           listChannelSubscription,
-		"unsubscribe":    deleteSubscription,
-		"install/cloud":  showInstallCloudHelp,
-		"install/server": showInstallServerHelp,
-		"connect":        executeConnect,
-		"disconnect":     executeDisconnect,
+		"list":                   listChannelSubscription,
+		"unsubscribe":            deleteSubscription,
+		"install/cloud":          showInstallCloudHelp,
+		"install/server":         showInstallServerHelp,
+		"connect":                executeConnect,
+		"disconnect":             executeDisconnect,
 		"settings/notifications": settingsNotificationsCommand,
-		"help":           confluenceHelpCommand,
+		"help":                   confluenceHelpCommand,
 	},
 	defaultHandler: executeConfluenceDefault,
 }

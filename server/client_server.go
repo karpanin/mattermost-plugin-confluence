@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -11,7 +12,6 @@ import (
 
 	"github.com/mattermost/mattermost-plugin-confluence/server/serializer"
 	"github.com/mattermost/mattermost-plugin-confluence/server/service"
-	"github.com/mattermost/mattermost-plugin-confluence/server/util"
 	"github.com/mattermost/mattermost-plugin-confluence/server/util/types"
 )
 
@@ -125,17 +125,38 @@ type CreatePageInput struct {
 	Body         string
 }
 
+type CreateCommentInput struct {
+	PageID string
+	Body   string
+}
+
 type CreatePagePayload struct {
-	Type      string                  `json:"type"`
-	Title     string                  `json:"title"`
-	Space     ContentSpacePayload     `json:"space"`
-	Body      ContentBodyPayload      `json:"body"`
+	Type      string                   `json:"type"`
+	Title     string                   `json:"title"`
+	Space     ContentSpacePayload      `json:"space"`
+	Body      ContentBodyPayload       `json:"body"`
 	Ancestors []ContentAncestorPayload `json:"ancestors,omitempty"`
+}
+
+type ContentContainerPayload struct {
+	ID   string `json:"id"`
+	Type string `json:"type"`
+}
+
+type CreateCommentPayload struct {
+	Type      string                  `json:"type"`
+	Container ContentContainerPayload `json:"container"`
+	Body      ContentBodyPayload      `json:"body"`
 }
 
 type CreatedPage struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+	Links Links  `json:"_links"`
+}
+
+type CreatedComment struct {
+	ID    string `json:"id"`
 	Links Links  `json:"_links"`
 }
 
@@ -147,6 +168,24 @@ type ConfluenceWatcher struct {
 
 type ContentWatchersResponse struct {
 	Results []ConfluenceWatcher `json:"results"`
+}
+
+type SpaceOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+type PageOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+type SpaceListResponse struct {
+	Results []SpaceResponse `json:"results"`
+}
+
+type ContentSearchResponse struct {
+	Results []CreatedPage `json:"results"`
 }
 
 type ConfluenceServerEvent struct {
@@ -212,8 +251,6 @@ func (csc *confluenceServerClient) GetCommentData(webhookPayload *serializer.Con
 		return nil, err
 	}
 
-	commentResponse.Body.View.Value = util.GetBodyForExcerpt(commentResponse.Body.View.Value)
-
 	return commentResponse, nil
 }
 
@@ -222,8 +259,6 @@ func (csc *confluenceServerClient) GetPageData(pageID int) (*PageResponse, error
 	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s%s?status=any&expand=body.view,container,space,history", PathContentData, strconv.Itoa(pageID)), http.MethodGet, nil, pageResponse, csc.HTTPClient); err != nil {
 		return nil, err
 	}
-
-	pageResponse.Body.View.Value = util.GetBodyForExcerpt(pageResponse.Body.View.Value)
 
 	return pageResponse, nil
 }
@@ -328,6 +363,29 @@ func (csc *confluenceServerClient) CreatePage(in *CreatePageInput) (*CreatedPage
 	return created, nil
 }
 
+func (csc *confluenceServerClient) AddCommentToPage(in *CreateCommentInput) (*CreatedComment, error) {
+	payload := CreateCommentPayload{
+		Type: "comment",
+		Container: ContentContainerPayload{
+			ID:   strings.TrimSpace(in.PageID),
+			Type: "page",
+		},
+		Body: ContentBodyPayload{
+			Storage: ContentBodyStorage{
+				Value:          in.Body,
+				Representation: "storage",
+			},
+		},
+	}
+
+	created := &CreatedComment{}
+	if _, _, err := service.CallJSONWithURL(csc.URL, PathContentData, http.MethodPost, payload, created, csc.HTTPClient); err != nil {
+		return nil, err
+	}
+
+	return created, nil
+}
+
 func (csc *confluenceServerClient) GetContentWatchers(pageID string) ([]ConfluenceWatcher, error) {
 	response := &ContentWatchersResponse{}
 	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s%s/watchers", PathContentData, pageID), http.MethodGet, nil, response, csc.HTTPClient); err != nil {
@@ -335,6 +393,52 @@ func (csc *confluenceServerClient) GetContentWatchers(pageID string) ([]Confluen
 	}
 
 	return response.Results, nil
+}
+
+func (csc *confluenceServerClient) GetAvailableSpaces() ([]SpaceOption, error) {
+	response := &SpaceListResponse{}
+	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s?limit=100&status=current&type=global", PathSpaceData), http.MethodGet, nil, response, csc.HTTPClient); err != nil {
+		return nil, err
+	}
+
+	options := make([]SpaceOption, 0, len(response.Results))
+	for _, result := range response.Results {
+		label := result.Key
+		if strings.TrimSpace(result.Name) != "" {
+			label = fmt.Sprintf("%s (%s)", result.Name, result.Key)
+		}
+		options = append(options, SpaceOption{
+			Value: result.Key,
+			Label: label,
+		})
+	}
+
+	return options, nil
+}
+
+func (csc *confluenceServerClient) SearchPages(spaceKey, query string) ([]PageOption, error) {
+	query = strings.TrimSpace(query)
+	if len(query) < 2 {
+		return []PageOption{}, nil
+	}
+
+	cql := fmt.Sprintf("type=page AND space=\"%s\" AND title~\"%s*\"", strings.TrimSpace(spaceKey), escapeCQL(query))
+	path := fmt.Sprintf("%s?cql=%s&limit=20", PathContentData+"search", url.QueryEscape(cql))
+
+	response := &ContentSearchResponse{}
+	if _, _, err := service.CallJSONWithURL(csc.URL, path, http.MethodGet, nil, response, csc.HTTPClient); err != nil {
+		return nil, err
+	}
+
+	options := make([]PageOption, 0, len(response.Results))
+	for _, result := range response.Results {
+		options = append(options, PageOption{
+			Value: result.ID,
+			Label: result.Title,
+		})
+	}
+
+	return options, nil
 }
 
 func formatMattermostPostForConfluence(postMessage, permalink string) string {
@@ -355,4 +459,10 @@ func formatMattermostPostForConfluence(postMessage, permalink string) string {
 	paragraphs = append(paragraphs, fmt.Sprintf("<p><a href=\"%s\">View original message in Mattermost</a></p>", html.EscapeString(permalink)))
 
 	return strings.Join(paragraphs, "")
+}
+
+func escapeCQL(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `"`, `\"`)
+	return value
 }

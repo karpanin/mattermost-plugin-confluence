@@ -47,6 +47,21 @@ export default class Client {
         return this.doPost(url, body);
     };
 
+    addCommentToPageFromPost = (body) => {
+        const url = `${this.pluginApiUrl}/page/comment-from-post`;
+        return this.doPost(url, body);
+    };
+
+    getCreatePageSpaces = () => {
+        const url = `${this.pluginApiUrl}/page/spaces`;
+        return this.doGet(url);
+    };
+
+    searchCreatePageParents = (spaceKey, query) => {
+        const url = `${this.pluginApiUrl}/page/parents?space_key=${encodeURIComponent(spaceKey)}&query=${encodeURIComponent(query)}`;
+        return this.doGet(url);
+    };
+
     doGet = async (url, headers = {}) => {
         headers['X-Requested-With'] = 'XMLHttpRequest';
 

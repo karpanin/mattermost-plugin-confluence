@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -12,7 +11,6 @@ import (
 
 	"github.com/mattermost/mattermost-plugin-confluence/server/config"
 	"github.com/mattermost/mattermost-plugin-confluence/server/store"
-	"github.com/mattermost/mattermost-plugin-confluence/server/util"
 )
 
 var createPageFromPost = &Endpoint{
@@ -134,7 +132,7 @@ func handleCreatePageFromPost(w http.ResponseWriter, r *http.Request, p *Plugin)
 		threadID = post.RootId
 	}
 
-	if err = publishCreatedPageThreadPost(p, userID, post.ChannelId, threadID, createdPage.Title, pageURL); err != nil {
+	if err = publishThreadPost(p, userID, post.ChannelId, threadID, fmt.Sprintf("Created Confluence page: [%s](%s)", createdPage.Title, pageURL)); err != nil {
 		http.Error(w, "Confluence page was created, but publishing the Mattermost thread post failed.", http.StatusInternalServerError)
 		return
 	}
@@ -155,23 +153,4 @@ func handleCreatePageFromPost(w http.ResponseWriter, r *http.Request, p *Plugin)
 	}); err != nil {
 		http.Error(w, "Failed to encode response.", http.StatusInternalServerError)
 	}
-}
-
-func publishCreatedPageThreadPost(p *Plugin, userID, channelID, threadID, title, pageURL string) error {
-	post := &model.Post{
-		UserId:    userID,
-		ChannelId: channelID,
-		RootId:    threadID,
-		Message:   fmt.Sprintf("Created Confluence page: [%s](%s)", title, pageURL),
-	}
-
-	if _, appErr := p.API.CreatePost(post); appErr != nil {
-		return errors.New(appErr.Error())
-	}
-
-	return nil
-}
-
-func getMattermostPermalink(postID string) string {
-	return strings.TrimRight(util.GetSiteURL(), "/") + "/_redirect/pl/" + postID
 }

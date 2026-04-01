@@ -1,5 +1,5 @@
 import {
-    closeSubscriptionModal, openSubscriptionModal, saveChannelSubscription, editChannelSubscription, getChannelSubscription, getSubscriptionAccess, getPluginConfig, openCreatePageModal, closeCreatePageModal, createPageFromPost,
+    closeSubscriptionModal, openSubscriptionModal, saveChannelSubscription, editChannelSubscription, getChannelSubscription, getSubscriptionAccess, getPluginConfig, openCreatePageModal, closeCreatePageModal, createPageFromPost, getCreatePageSpaces, searchCreatePageParents, openAddCommentModal, closeAddCommentModal, addCommentToPageFromPost,
 } from './subscription_modal';
 
 export {
@@ -13,4 +13,9 @@ export {
     openCreatePageModal,
     closeCreatePageModal,
     createPageFromPost,
+    openAddCommentModal,
+    closeAddCommentModal,
+    addCommentToPageFromPost,
+    getCreatePageSpaces,
+    searchCreatePageParents,
 };

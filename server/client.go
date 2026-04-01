@@ -16,5 +16,8 @@ type RESTService interface {
 	GetPageData(int) (*PageResponse, error)
 	GetSpaceKeyFromSpaceID(int64) (string, error)
 	CreatePage(in *CreatePageInput) (*CreatedPage, error)
+	AddCommentToPage(in *CreateCommentInput) (*CreatedComment, error)
 	GetContentWatchers(pageID string) ([]ConfluenceWatcher, error)
+	GetAvailableSpaces() ([]SpaceOption, error)
+	SearchPages(spaceKey, query string) ([]PageOption, error)
 }

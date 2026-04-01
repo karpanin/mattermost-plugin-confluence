@@ -2,13 +2,13 @@ import {connect} from 'react-redux';
 import {bindActionCreators} from 'redux';
 import {getPost} from 'mattermost-redux/selectors/entities/posts';
 
-import {closeCreatePageModal, createPageFromPost, getCreatePageSpaces, searchCreatePageParents} from '../../actions';
+import {closeAddCommentModal, addCommentToPageFromPost, getCreatePageSpaces, searchCreatePageParents} from '../../actions';
 import Selectors from '../../selectors';
 
-import CreatePageModal from './create_page_modal';
+import AddCommentModal from './add_comment_modal';
 
 const mapStateToProps = (state) => {
-    const modalState = Selectors.getCreatePageModal(state);
+    const modalState = Selectors.getAddCommentModal(state);
 
     return {
         modalState,
@@ -17,10 +17,10 @@ const mapStateToProps = (state) => {
 };
 
 const mapDispatchToProps = (dispatch) => bindActionCreators({
-    close: closeCreatePageModal,
-    createPageFromPost,
+    close: closeAddCommentModal,
+    addCommentToPageFromPost,
     getCreatePageSpaces,
     searchCreatePageParents,
 }, dispatch);
 
-export default connect(mapStateToProps, mapDispatchToProps)(CreatePageModal);
+export default connect(mapStateToProps, mapDispatchToProps)(AddCommentModal);

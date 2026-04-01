@@ -54,8 +54,30 @@ func updateNotificationSetting(connection *types.Connection, role, value string)
 	return "", true
 }
 
+func updateGlobalNotificationSetting(connection *types.Connection, value string) (string, bool) {
+	var enabled bool
+	switch value {
+	case settingOn:
+		enabled = true
+	case settingOff:
+		enabled = false
+	default:
+		return fmt.Sprintf("* Invalid value `%s`. Accepted values are: `on` or `off`.", value), false
+	}
+
+	ensureConnectionSettings(connection)
+	connection.Settings.Notifications = enabled
+
+	return "", true
+}
+
 func getNotificationSettingsText(connection *types.Connection) string {
 	ensureConnectionSettings(connection)
+
+	globalState := settingOff
+	if connection.Settings.Notifications {
+		globalState = settingOn
+	}
 
 	mentionState := settingOff
 	if connection.ShouldReceiveNotification(settingMentionRole) {
@@ -67,7 +89,7 @@ func getNotificationSettingsText(connection *types.Connection) string {
 		watchingState = settingOn
 	}
 
-	return fmt.Sprintf("Current settings:\n\t- Notifications for mention: %s \n\t- Notifications for watching: %s", mentionState, watchingState)
+	return fmt.Sprintf("Current settings:\n\t- Notifications: %s \n\t- Notifications for mention: %s \n\t- Notifications for watching: %s", globalState, mentionState, watchingState)
 }
 
 func settingsNotificationsCommand(p *Plugin, header *model.CommandArgs, args ...string) *model.CommandResponse {
@@ -87,13 +109,31 @@ func settingsNotificationsCommand(p *Plugin, header *model.CommandArgs, args ...
 		return p.responsef(header, "%s", getNotificationSettingsText(connection))
 	}
 
+	if len(args) == 1 {
+		helpTextSuffix, ok := updateGlobalNotificationSetting(connection, args[0])
+		if !ok {
+			return p.responsef(header, "`/confluence settings notifications [on|off]`\n`/confluence settings notifications [mention|watching] [on|off]`\n%s", helpTextSuffix)
+		}
+
+		if err := store.StoreConnection(pluginConfig.ConfluenceURL, header.UserId, connection); err != nil {
+			return p.responsef(header, "Could not store new settings. Please contact your system administrator. Error: %v", err)
+		}
+
+		state := settingOff
+		if connection.Settings.Notifications {
+			state = settingOn
+		}
+
+		return p.responsef(header, "Settings updated:\n* Notifications %s.", state)
+	}
+
 	if len(args) != 2 {
-		return p.responsef(header, "`/confluence settings notifications [mention|watching] [on|off]`\n* Invalid command args.")
+		return p.responsef(header, "`/confluence settings notifications [on|off]`\n`/confluence settings notifications [mention|watching] [on|off]`\n* Invalid command args.")
 	}
 
 	helpTextSuffix, ok := updateNotificationSetting(connection, args[0], args[1])
 	if !ok {
-		return p.responsef(header, "`/confluence settings notifications [mention|watching] [on|off]`\n%s", helpTextSuffix)
+		return p.responsef(header, "`/confluence settings notifications [on|off]`\n`/confluence settings notifications [mention|watching] [on|off]`\n%s", helpTextSuffix)
 	}
 
 	if err := store.StoreConnection(pluginConfig.ConfluenceURL, header.UserId, connection); err != nil {

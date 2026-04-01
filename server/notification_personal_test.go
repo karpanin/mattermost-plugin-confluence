@@ -16,6 +16,14 @@ func TestExtractMentionIdentifiers(t *testing.T) {
 	assert.Contains(t, identifiers, "user-key-2")
 }
 
+func TestExtractMentionIdentifiersFromConfluenceViewHTML(t *testing.T) {
+	body := `<p><a class="confluence-userlink user-mention" data-linked-resource-id="user-key-3" data-username="alice">@Alice</a></p>`
+	identifiers := extractMentionIdentifiers(body)
+
+	assert.Contains(t, identifiers, "user-key-3")
+	assert.Contains(t, identifiers, "alice")
+}
+
 func TestBuildPersonalNotificationMessage(t *testing.T) {
 	event := &ConfluenceServerEvent{
 		Comment: &CommentResponse{

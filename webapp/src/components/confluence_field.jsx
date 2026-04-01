@@ -30,12 +30,20 @@ export default class ConfluenceField extends React.PureComponent {
         isMulti: PropTypes.bool,
         isSearchable: PropTypes.bool,
         testId: PropTypes.string,
+        onInputChange: PropTypes.func,
+        isLoading: PropTypes.bool,
+        isDisabled: PropTypes.bool,
+        noOptionsMessage: PropTypes.func,
     };
 
     static defaultProps = {
         readOnly: false,
         formGroupStyle: {},
         formControlStyle: {},
+        onInputChange: null,
+        isLoading: false,
+        isDisabled: false,
+        noOptionsMessage: undefined,
     };
 
     constructor(props) {
@@ -85,7 +93,8 @@ export default class ConfluenceField extends React.PureComponent {
     render() {
         const {
             required, fieldType, theme, label, formGroupStyle, formControlStyle,
-            value, type, placeholder, name, readOnly, options, isMulti, isSearchable, testId,
+            value, type, placeholder, name, readOnly, options, isMulti, isSearchable, testId, onInputChange, isLoading, isDisabled,
+            noOptionsMessage,
         } = this.props;
         const requiredErrorMsg = 'This field is required.';
         let requiredError = null;
@@ -121,7 +130,12 @@ export default class ConfluenceField extends React.PureComponent {
                     menuPlacement='auto'
                     styles={getStyleForReactSelect(theme)}
                     onChange={this.handleChange}
+                    onInputChange={onInputChange}
+                    isLoading={isLoading}
+                    isDisabled={isDisabled}
+                    noOptionsMessage={noOptionsMessage}
                     inputId={testId}
+                    placeholder={placeholder}
                 />
             );
         }

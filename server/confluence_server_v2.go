@@ -167,13 +167,14 @@ func (e ConfluenceServerEvent) GetNotificationPost(eventType, baseURL, botUserID
 	switch eventType {
 	case serializer.PageCreatedEvent:
 		message := fmt.Sprintf(ConfluencePageCreatedMessage, e.GetUserDisplayNameForPageEvents(), e.GetSpaceDisplayNameForPageEvents(baseURL))
-		if strings.TrimSpace(e.Page.Body.View.Value) != "" {
+		pageExcerpt := strings.TrimSpace(util.GetBodyForExcerpt(e.Page.Body.View.Value))
+		if pageExcerpt != "" {
 			attachment = &model.SlackAttachment{
 				Fallback:  message,
 				Pretext:   message,
 				Title:     e.Page.Title,
 				TitleLink: joinURL(baseURL, e.Page.Links.Self),
-				Text:      fmt.Sprintf("%s\n\n[**View in Confluence**](%s)", strings.TrimSpace(e.Page.Body.View.Value), joinURL(baseURL, e.Page.Links.Self)),
+				Text:      fmt.Sprintf("%s\n\n[**View in Confluence**](%s)", pageExcerpt, joinURL(baseURL, e.Page.Links.Self)),
 			}
 		} else {
 			post.Message = fmt.Sprintf(ConfluencePageCreatedWithoutBodyMessage, e.GetUserDisplayNameForPageEvents(), e.GetPageDisplayNameForPageEvents(baseURL), e.GetSpaceDisplayNameForPageEvents(baseURL))
@@ -181,11 +182,12 @@ func (e ConfluenceServerEvent) GetNotificationPost(eventType, baseURL, botUserID
 
 	case serializer.PageUpdatedEvent:
 		message := fmt.Sprintf(ConfluencePageUpdatedMessage, eventTriggerer, e.GetPageDisplayNameForPageEvents(baseURL), e.GetSpaceDisplayNameForPageEvents(baseURL))
-		if strings.TrimSpace(e.Page.Body.View.Value) != "" {
+		pageExcerpt := strings.TrimSpace(util.GetBodyForExcerpt(e.Page.Body.View.Value))
+		if pageExcerpt != "" {
 			attachment = &model.SlackAttachment{
 				Fallback: message,
 				Pretext:  message,
-				Text:     fmt.Sprintf("**What's Changed?**\n> %s\n\n[**View in Confluence**](%s)", strings.TrimSpace(e.Page.Body.View.Value), joinURL(baseURL, e.Page.Links.Self)),
+				Text:     fmt.Sprintf("**What's Changed?**\n> %s\n\n[**View in Confluence**](%s)", pageExcerpt, joinURL(baseURL, e.Page.Links.Self)),
 			}
 		} else {
 			post.Message = message
@@ -200,8 +202,9 @@ func (e ConfluenceServerEvent) GetNotificationPost(eventType, baseURL, botUserID
 	case serializer.CommentCreatedEvent:
 		message := fmt.Sprintf(ConfluenceCommentCreatedMessage, e.GetUserDisplayNameForCommentEvents(), e.GetPageDisplayNameForCommentEvents(baseURL), e.GetSpaceDisplayNameForCommentEvents(baseURL))
 		text := ""
-		if strings.TrimSpace(e.Comment.Body.View.Value) != "" {
-			text = fmt.Sprintf("**%s wrote:**\n> %s\n\n", e.GetUserDisplayNameForCommentEvents(), strings.TrimSpace(e.Comment.Body.View.Value))
+		commentExcerpt := strings.TrimSpace(util.GetBodyForExcerpt(e.Comment.Body.View.Value))
+		if commentExcerpt != "" {
+			text = fmt.Sprintf("**%s wrote:**\n> %s\n\n", e.GetUserDisplayNameForCommentEvents(), commentExcerpt)
 			attachment = &model.SlackAttachment{
 				Fallback: message,
 				Pretext:  message,
@@ -213,11 +216,12 @@ func (e ConfluenceServerEvent) GetNotificationPost(eventType, baseURL, botUserID
 
 	case serializer.CommentUpdatedEvent:
 		message := fmt.Sprintf(ConfluenceCommentUpdatedMessage, e.GetUserDisplayNameForCommentEvents(), e.GetPageDisplayNameForCommentEvents(baseURL), e.GetSpaceDisplayNameForCommentEvents(baseURL))
-		if strings.TrimSpace(e.Comment.Body.View.Value) != "" {
+		commentExcerpt := strings.TrimSpace(util.GetBodyForExcerpt(e.Comment.Body.View.Value))
+		if commentExcerpt != "" {
 			attachment = &model.SlackAttachment{
 				Fallback: message,
 				Pretext:  message,
-				Text:     fmt.Sprintf("**Updated Comment:**\n> %s\n\n[**View in Confluence**](%s)", strings.TrimSpace(e.Comment.Body.View.Value), joinURL(baseURL, e.Comment.Links.Self)),
+				Text:     fmt.Sprintf("**Updated Comment:**\n> %s\n\n[**View in Confluence**](%s)", commentExcerpt, joinURL(baseURL, e.Comment.Links.Self)),
 			}
 		} else {
 			post.Message = fmt.Sprintf(ConfluenceEmptyCommentUpdatedMessage, e.GetUserDisplayNameForCommentEvents(), joinURL(baseURL, e.Comment.Links.Self), e.GetPageDisplayNameForCommentEvents(baseURL), e.GetSpaceDisplayNameForCommentEvents(baseURL))

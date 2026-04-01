@@ -342,6 +342,8 @@ func (p *Plugin) refreshAndStoreToken(connection *types.Connection, instanceID s
 type UserConnectionInfo struct {
 	CanRunSubscribeCommand    bool `json:"can_run_subscribe_command"`
 	ServerVersionGreaterthan9 bool `json:"server_version_greater_than_9"`
+	IsConnected               bool `json:"is_connected"`
+	IsConfigured              bool `json:"is_configured"`
 }
 
 func httpGetUserInfo(w http.ResponseWriter, r *http.Request, p *Plugin) {
@@ -354,11 +356,14 @@ func httpGetUserInfo(w http.ResponseWriter, r *http.Request, p *Plugin) {
 
 	mattermostUserID := r.Header.Get(config.HeaderMattermostUserID)
 	serverVersionGreaterThan9 := config.GetConfig().ServerVersionGreaterthan9
+	isConfigured := config.GetConfig().ConfluenceURL != "" && config.GetConfig().IsOAuthConfigured()
 
 	if !serverVersionGreaterThan9 {
 		info := &UserConnectionInfo{
 			CanRunSubscribeCommand:    util.IsSystemAdmin(mattermostUserID),
 			ServerVersionGreaterthan9: serverVersionGreaterThan9,
+			IsConnected:               util.IsSystemAdmin(mattermostUserID),
+			IsConfigured:              isConfigured,
 		}
 		b, _ := json.Marshal(info)
 		w.Header().Set("Content-Type", "application/json")
@@ -380,6 +385,8 @@ func httpGetUserInfo(w http.ResponseWriter, r *http.Request, p *Plugin) {
 			info := &UserConnectionInfo{
 				CanRunSubscribeCommand:    false,
 				ServerVersionGreaterthan9: serverVersionGreaterThan9,
+				IsConnected:               false,
+				IsConfigured:              isConfigured,
 			}
 			b, _ := json.Marshal(info)
 			w.Header().Set("Content-Type", "application/json")
@@ -395,6 +402,8 @@ func httpGetUserInfo(w http.ResponseWriter, r *http.Request, p *Plugin) {
 	info := &UserConnectionInfo{
 		CanRunSubscribeCommand:    len(connection.ConfluenceAccountID()) != 0,
 		ServerVersionGreaterthan9: serverVersionGreaterThan9,
+		IsConnected:               len(connection.ConfluenceAccountID()) != 0,
+		IsConfigured:              isConfigured,
 	}
 
 	b, _ := json.Marshal(info)

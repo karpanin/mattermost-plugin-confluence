@@ -38,6 +38,9 @@ var Endpoints = map[string]*Endpoint{
 	getEndpointKey(userConnectionInfo):                  userConnectionInfo,
 	getEndpointKey(getPluginConfig):                     getPluginConfig,
 	getEndpointKey(createPageFromPost):                  createPageFromPost,
+	getEndpointKey(addCommentToPageFromPost):            addCommentToPageFromPost,
+	getEndpointKey(getCreatePageSpaces):                 getCreatePageSpaces,
+	getEndpointKey(searchCreatePageParents):             searchCreatePageParents,
 }
 
 // Uniquely identifies an endpoint using path and method

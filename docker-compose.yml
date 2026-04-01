@@ -21,7 +21,6 @@ services:
       NPM_CONFIG_CACHE: /workspace/.cache/npm
     volumes:
       - .:/workspace
-      - ./dist:/workspace/dist
       - ./.cache/go-build:/workspace/.cache/go-build
       - ./.cache/gopath:/workspace/.cache/gopath
       - ./.cache/gomod:/workspace/.cache/gomod

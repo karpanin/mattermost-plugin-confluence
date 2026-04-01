@@ -42,12 +42,18 @@ export const editChannelSubscription = (body) => {
 };
 
 export function getSubscriptionAccess() {
-    return async () => {
+    return async (dispatch) => {
         let data = null;
         let error = null;
 
         try {
             data = await Client.getSubscriptionAccess();
+            if (dispatch) {
+                dispatch({
+                    type: Constants.ACTION_TYPES.RECEIVED_SUBSCRIPTION_ACCESS,
+                    data,
+                });
+            }
         } catch (e) {
             error = e;
         }
@@ -96,11 +102,81 @@ export const closeCreatePageModal = () => (dispatch) => {
     });
 };
 
+export const openAddCommentModal = (postId) => (dispatch) => {
+    dispatch({
+        type: Constants.ACTION_TYPES.OPEN_ADD_COMMENT_MODAL,
+        data: {postId},
+    });
+};
+
+export const closeAddCommentModal = () => (dispatch) => {
+    dispatch({
+        type: Constants.ACTION_TYPES.CLOSE_ADD_COMMENT_MODAL,
+    });
+};
+
 export const createPageFromPost = (body) => {
     return async () => {
         let data = null;
         try {
             data = await Client.createPageFromPost(body);
+        } catch (error) {
+            return {
+                data,
+                error,
+            };
+        }
+
+        return {
+            data,
+            error: null,
+        };
+    };
+};
+
+export const addCommentToPageFromPost = (body) => {
+    return async () => {
+        let data = null;
+        try {
+            data = await Client.addCommentToPageFromPost(body);
+        } catch (error) {
+            return {
+                data,
+                error,
+            };
+        }
+
+        return {
+            data,
+            error: null,
+        };
+    };
+};
+
+export const getCreatePageSpaces = () => {
+    return async () => {
+        let data = null;
+        try {
+            data = await Client.getCreatePageSpaces();
+        } catch (error) {
+            return {
+                data,
+                error,
+            };
+        }
+
+        return {
+            data,
+            error: null,
+        };
+    };
+};
+
+export const searchCreatePageParents = (spaceKey, query) => {
+    return async () => {
+        let data = null;
+        try {
+            data = await Client.searchCreatePageParents(spaceKey, query);
         } catch (error) {
             return {
                 data,

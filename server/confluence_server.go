@@ -15,7 +15,6 @@ import (
 	"github.com/mattermost/mattermost-plugin-confluence/server/serializer"
 	"github.com/mattermost/mattermost-plugin-confluence/server/service"
 	"github.com/mattermost/mattermost-plugin-confluence/server/store"
-	"github.com/mattermost/mattermost-plugin-confluence/server/util"
 )
 
 var confluenceServerWebhook = &Endpoint{
@@ -296,8 +295,6 @@ func (p *Plugin) GetCommentDataWithAPIToken(webhookPayload *serializer.Confluenc
 		return nil, errors.Wrapf(err, "error getting comment data with API token")
 	}
 
-	commentResponse.Body.View.Value = util.GetBodyForExcerpt(commentResponse.Body.View.Value)
-
 	return commentResponse, nil
 }
 
@@ -313,8 +310,6 @@ func (p *Plugin) GetPageDataWithAPIToken(pageID int, pluginConfig *config.Config
 	if err := json.Unmarshal(body, pageResponse); err != nil {
 		return nil, errors.Wrapf(err, "error getting page data with API token")
 	}
-
-	pageResponse.Body.View.Value = util.GetBodyForExcerpt(pageResponse.Body.View.Value)
 
 	return pageResponse, nil
 }

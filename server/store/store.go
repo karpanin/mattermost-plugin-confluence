@@ -167,10 +167,12 @@ func StoreConnection(instanceID, mattermostUserID string, connection *types.Conn
 		return err
 	}
 
-	// Also store AccountID -> mattermostUserID because Confluence Cloud is deprecating the name field
-	// https://developer.atlassian.com/cloud/Confluence/platform/api-changes-for-user-privacy-announcement/
-	if err := set(keyWithInstanceID(instanceID, connection.ConfluenceAccountID()), mattermostUserID); err != nil {
-		return err
+	// Store username -> Mattermost user as a secondary lookup, since some Confluence Server/DC
+	// webhook/API payloads still reference users by username instead of user key.
+	if connection.Name != "" && connection.Name != connection.ConfluenceAccountID() {
+		if err := set(keyWithInstanceID(instanceID, connection.Name), mattermostUserID); err != nil {
+			return err
+		}
 	}
 
 	config.Mattermost.LogDebug("Stored: connection, keys:\n\t%s (%s): %+v\n\t%s (%s): %s",
@@ -220,6 +222,12 @@ func DeleteConnectionFromKVStore(instanceID, mattermostUserID string, c *types.C
 
 	if appErr := config.Mattermost.KVDelete(keyWithInstanceID(instanceID, c.ConfluenceAccountID())); appErr != nil {
 		return appErr
+	}
+
+	if c.Name != "" && c.Name != c.ConfluenceAccountID() {
+		if appErr := config.Mattermost.KVDelete(keyWithInstanceID(instanceID, c.Name)); appErr != nil {
+			return appErr
+		}
 	}
 
 	config.Mattermost.LogDebug("Deleted: user, keys: %s(%s), %s(%s)",
