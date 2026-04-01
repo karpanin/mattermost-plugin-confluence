@@ -28,24 +28,27 @@ class PluginClass {
         getSubscriptionAccess()(store.dispatch);
         registry.registerPostDropdownMenuAction({
             text: CreatePageAction,
-            action: async (postId) => {
+            action: (postId) => {
                 const state = store.getState();
                 const post = getPost(state, postId);
                 if (!post || isSystemMessage(post)) {
                     return;
                 }
 
-                const subscriptionAccessData = await ensureSubscriptionAccess(store, state);
-                if (!subscriptionAccessData?.is_configured) {
+                const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
+                if (subscriptionAccessData?.is_configured === false) {
                     return;
                 }
 
-                if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command) {
+                if (subscriptionAccessData?.is_connected === false && !subscriptionAccessData?.can_run_subscribe_command) {
+                    window.open(`/plugins/${manifest.id}/api/v1/oauth2/connect`, '_blank');
+                    return;
+                }
+
+                if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command || Object.keys(subscriptionAccessData || {}).length === 0) {
                     store.dispatch(openCreatePageModal(postId));
                     return;
                 }
-
-                window.open(`/plugins/${manifest.id}/api/v1/oauth2/connect`, '_blank');
             },
             filter: (postId) => {
                 const state = store.getState();
@@ -57,24 +60,27 @@ class PluginClass {
 
         registry.registerPostDropdownMenuAction({
             text: AddCommentAction,
-            action: async (postId) => {
+            action: (postId) => {
                 const state = store.getState();
                 const post = getPost(state, postId);
                 if (!post || isSystemMessage(post)) {
                     return;
                 }
 
-                const subscriptionAccessData = await ensureSubscriptionAccess(store, state);
-                if (!subscriptionAccessData?.is_configured) {
+                const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
+                if (subscriptionAccessData?.is_configured === false) {
                     return;
                 }
 
-                if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command) {
+                if (subscriptionAccessData?.is_connected === false && !subscriptionAccessData?.can_run_subscribe_command) {
+                    window.open(`/plugins/${manifest.id}/api/v1/oauth2/connect`, '_blank');
+                    return;
+                }
+
+                if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command || Object.keys(subscriptionAccessData || {}).length === 0) {
                     store.dispatch(openAddCommentModal(postId));
                     return;
                 }
-
-                window.open(`/plugins/${manifest.id}/api/v1/oauth2/connect`, '_blank');
             },
             filter: (postId) => {
                 const state = store.getState();
@@ -84,16 +90,6 @@ class PluginClass {
             },
         });
     }
-}
-
-async function ensureSubscriptionAccess(store, state) {
-    const current = Selectors.getSubscriptionAccess(state);
-    if (Object.keys(current || {}).length > 0) {
-        return current;
-    }
-
-    const response = await getSubscriptionAccess()(store.dispatch);
-    return response.data || Selectors.getSubscriptionAccess(store.getState());
 }
 
 //

@@ -278,7 +278,7 @@ func (p *Plugin) GetEventDataWithAPIToken(webhookPayload *serializer.ConfluenceS
 
 func (p *Plugin) GetCommentDataWithAPIToken(webhookPayload *serializer.ConfluenceServerWebhookPayload, pluginConfig *config.Configuration) (*CommentResponse, error) {
 	commentResponse := &CommentResponse{}
-	path := fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, fmt.Sprintf("%s%s?expand=body.view,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10)))
+	path := fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, fmt.Sprintf("%s%s?expand=body.view,body.storage,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10)))
 
 	body, statusCode, err := p.MakeHTTPCallWithAPIToken(path)
 	if err != nil || statusCode != http.StatusOK {
@@ -294,7 +294,7 @@ func (p *Plugin) GetCommentDataWithAPIToken(webhookPayload *serializer.Confluenc
 
 func (p *Plugin) GetPageDataWithAPIToken(pageID int, pluginConfig *config.Configuration) (*PageResponse, error) {
 	pageResponse := &PageResponse{}
-	path := fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, fmt.Sprintf("%s%s?status=any&expand=body.view,container,space,history", PathContentData, strconv.Itoa(pageID)))
+	path := fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, strconv.Itoa(pageID)))
 
 	body, statusCode, err := p.MakeHTTPCallWithAPIToken(path)
 	if err != nil || statusCode != http.StatusOK {

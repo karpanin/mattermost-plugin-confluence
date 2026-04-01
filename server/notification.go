@@ -194,7 +194,7 @@ func (n *notification) resolveMentionedUserIDs(instanceID string, event serializ
 	}
 
 	mentionedIDs := map[string]struct{}{}
-	for _, identifier := range extractMentionIdentifiers(serverEvent.Comment.Body.View.Value) {
+	for _, identifier := range extractMentionIdentifiers(getCommentMentionSource(serverEvent.Comment)) {
 		if identifier == "" || identifier == eventTriggererKey {
 			continue
 		}
@@ -292,7 +292,7 @@ func buildPersonalNotificationMessage(reason, eventType string, event serializer
 		pageName := serverEvent.GetPageDisplayNameForCommentEvents(baseURL)
 		spaceName := serverEvent.GetSpaceDisplayNameForCommentEvents(baseURL)
 		commentURL := joinURL(baseURL, serverEvent.Comment.Links.Self)
-		commentExcerpt := strings.TrimSpace(util.GetBodyForExcerpt(serverEvent.Comment.Body.View.Value))
+		commentExcerpt := getCommentExcerpt(serverEvent.Comment)
 		if commentExcerpt != "" {
 			return fmt.Sprintf("%s mentioned you in a [comment](%s) on %s in %s.\n> %s", eventTriggerer, commentURL, pageName, spaceName, strings.ReplaceAll(commentExcerpt, "\n", "\n> "))
 		}
@@ -322,6 +322,31 @@ func extractMentionIdentifiers(body string) []string {
 	}
 
 	return mapKeys(identifiers)
+}
+
+func getCommentMentionSource(comment *CommentResponse) string {
+	if comment == nil {
+		return ""
+	}
+
+	body := strings.TrimSpace(comment.Body.Storage.Value)
+	if body != "" {
+		return body
+	}
+
+	return strings.TrimSpace(comment.Body.View.Value)
+}
+
+func getCommentExcerpt(comment *CommentResponse) string {
+	if comment == nil {
+		return ""
+	}
+
+	if excerpt := strings.TrimSpace(util.GetBodyForExcerpt(comment.Body.View.Value)); excerpt != "" {
+		return excerpt
+	}
+
+	return strings.TrimSpace(util.GetBodyForExcerpt(comment.Body.Storage.Value))
 }
 
 func mapKeys(values map[string]struct{}) []string {

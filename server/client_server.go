@@ -71,7 +71,8 @@ type View struct {
 }
 
 type Body struct {
-	View View `json:"view"`
+	View    View `json:"view"`
+	Storage View `json:"storage"`
 }
 
 type CreatedBy struct {
@@ -247,7 +248,7 @@ func (csc *confluenceServerClient) GetEventData(webhookPayload *serializer.Confl
 
 func (csc *confluenceServerClient) GetCommentData(webhookPayload *serializer.ConfluenceServerWebhookPayload) (*CommentResponse, error) {
 	commentResponse := &CommentResponse{}
-	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s%s?expand=body.view,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10)), http.MethodGet, nil, commentResponse, csc.HTTPClient); err != nil {
+	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s%s?expand=body.view,body.storage,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10)), http.MethodGet, nil, commentResponse, csc.HTTPClient); err != nil {
 		return nil, err
 	}
 
@@ -256,7 +257,7 @@ func (csc *confluenceServerClient) GetCommentData(webhookPayload *serializer.Con
 
 func (csc *confluenceServerClient) GetPageData(pageID int) (*PageResponse, error) {
 	pageResponse := &PageResponse{}
-	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s%s?status=any&expand=body.view,container,space,history", PathContentData, strconv.Itoa(pageID)), http.MethodGet, nil, pageResponse, csc.HTTPClient); err != nil {
+	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, strconv.Itoa(pageID)), http.MethodGet, nil, pageResponse, csc.HTTPClient); err != nil {
 		return nil, err
 	}
 
