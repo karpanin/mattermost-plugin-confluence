@@ -26,40 +26,64 @@ class PluginClass {
         const hooks = new Hooks(store);
         registry.registerSlashCommandWillBePostedHook(hooks.slashCommandWillBePostedHook);
         getSubscriptionAccess()(store.dispatch);
-        registerConfluencePostAction(registry, store, CreatePageAction, openCreatePageModal);
-        registerConfluencePostAction(registry, store, AddCommentAction, openAddCommentModal);
+        registry.registerPostDropdownMenuAction({
+            text: CreatePageAction,
+            action: (postId) => {
+                const state = store.getState();
+                const post = getPost(state, postId);
+                if (!post || isSystemMessage(post)) {
+                    return;
+                }
+
+                const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
+                if (!subscriptionAccessData?.is_configured) {
+                    return;
+                }
+
+                if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command) {
+                    store.dispatch(openCreatePageModal(postId));
+                    return;
+                }
+
+                window.open(`/plugins/${manifest.id}/api/v1/oauth2/connect`, '_blank');
+            },
+            filter: (postId) => {
+                const state = store.getState();
+                const post = getPost(state, postId);
+                const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
+                return Boolean(post && !isSystemMessage(post) && subscriptionAccessData?.is_configured);
+            },
+        });
+
+        registry.registerPostDropdownMenuAction({
+            text: AddCommentAction,
+            action: (postId) => {
+                const state = store.getState();
+                const post = getPost(state, postId);
+                if (!post || isSystemMessage(post)) {
+                    return;
+                }
+
+                const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
+                if (!subscriptionAccessData?.is_configured) {
+                    return;
+                }
+
+                if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command) {
+                    store.dispatch(openAddCommentModal(postId));
+                    return;
+                }
+
+                window.open(`/plugins/${manifest.id}/api/v1/oauth2/connect`, '_blank');
+            },
+            filter: (postId) => {
+                const state = store.getState();
+                const post = getPost(state, postId);
+                const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
+                return Boolean(post && !isSystemMessage(post) && subscriptionAccessData?.is_configured);
+            },
+        });
     }
-}
-
-function registerConfluencePostAction(registry, store, text, openModal) {
-    registry.registerPostDropdownMenuAction({
-        text,
-        action: async (postId) => {
-            const state = store.getState();
-            const post = getPost(state, postId);
-            if (!post || isSystemMessage(post)) {
-                return;
-            }
-
-            const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
-            if (!subscriptionAccessData?.is_configured) {
-                return;
-            }
-
-            if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command) {
-                store.dispatch(openModal(postId));
-                return;
-            }
-
-            window.open(`/plugins/${manifest.id}/api/v1/oauth2/connect`, '_blank');
-        },
-        filter: (postId) => {
-            const state = store.getState();
-            const post = getPost(state, postId);
-            const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
-            return Boolean(post && !isSystemMessage(post) && subscriptionAccessData?.is_configured);
-        },
-    });
 }
 
 //

@@ -55,20 +55,14 @@ func (n *notification) SendConfluenceNotifications(event serializer.ConfluenceEv
 	}
 
 	spaceKey, pageID := n.extractSpaceKeyAndPageID(event, eventType)
-	if spaceKey == "" || pageID == "" {
-		return
-	}
-
 	post := event.GetNotificationPost(eventType, url, botUserID, eventTriggerer)
-	if post == nil {
-		return
-	}
-
-	subscriptionChannelIDs := n.getNotificationChannelIDs(url, spaceKey, pageID, eventType)
-	for _, channelID := range subscriptionChannelIDs {
-		post.ChannelId = channelID
-		if _, err := n.API.CreatePost(post); err != nil {
-			n.API.LogError("Unable to create Post in Mattermost", "Error", err.Error())
+	if post != nil && spaceKey != "" && pageID != "" {
+		subscriptionChannelIDs := n.getNotificationChannelIDs(url, spaceKey, pageID, eventType)
+		for _, channelID := range subscriptionChannelIDs {
+			post.ChannelId = channelID
+			if _, err := n.API.CreatePost(post); err != nil {
+				n.API.LogError("Unable to create Post in Mattermost", "Error", err.Error())
+			}
 		}
 	}
 
@@ -298,6 +292,10 @@ func buildPersonalNotificationMessage(reason, eventType string, event serializer
 		pageName := serverEvent.GetPageDisplayNameForCommentEvents(baseURL)
 		spaceName := serverEvent.GetSpaceDisplayNameForCommentEvents(baseURL)
 		commentURL := joinURL(baseURL, serverEvent.Comment.Links.Self)
+		commentExcerpt := strings.TrimSpace(util.GetBodyForExcerpt(serverEvent.Comment.Body.View.Value))
+		if commentExcerpt != "" {
+			return fmt.Sprintf("%s mentioned you in a [comment](%s) on %s in %s.\n> %s", eventTriggerer, commentURL, pageName, spaceName, strings.ReplaceAll(commentExcerpt, "\n", "\n> "))
+		}
 		return fmt.Sprintf("%s mentioned you in a [comment](%s) on %s in %s.", eventTriggerer, commentURL, pageName, spaceName)
 	case notificationTypeWatching:
 		if eventType != serializer.PageUpdatedEvent || serverEvent.Page == nil {
