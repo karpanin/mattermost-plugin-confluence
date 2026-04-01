@@ -20,6 +20,18 @@ const initialState = {
     loadingPages: false,
 };
 
+const normalizePageOptions = (options) => {
+    if (!Array.isArray(options)) {
+        return [];
+    }
+
+    return options.map((option) => ({
+        ...option,
+        value: String(option?.value ?? ''),
+        label: String(option?.label ?? option?.value ?? ''),
+    }));
+};
+
 export default class AddCommentModal extends React.PureComponent {
     static propTypes = {
         modalState: PropTypes.object.isRequired,
@@ -112,7 +124,7 @@ export default class AddCommentModal extends React.PureComponent {
 
         this.setState({
             loadingPages: false,
-            pageOptions: Array.isArray(response.data) ? response.data : [],
+            pageOptions: normalizePageOptions(response.data),
             error: response.error ? (response.error.response?.text || 'Failed to search Confluence pages.') : '',
         });
         return query;
@@ -204,7 +216,7 @@ export default class AddCommentModal extends React.PureComponent {
                         removeValidation={this.validator.removeValidation}
                         onChange={this.handlePageChange}
                         onInputChange={this.handlePageSearch}
-                        disableClientFilter={true}
+                        filterOption={() => true}
                         isDisabled={!this.state.selectedSpace}
                         isLoading={loadingPages}
                         noOptionsMessage={() => {

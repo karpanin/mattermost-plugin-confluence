@@ -34,7 +34,7 @@ export default class ConfluenceField extends React.PureComponent {
         isLoading: PropTypes.bool,
         isDisabled: PropTypes.bool,
         noOptionsMessage: PropTypes.func,
-        disableClientFilter: PropTypes.bool,
+        filterOption: PropTypes.func,
     };
 
     static defaultProps = {
@@ -45,7 +45,7 @@ export default class ConfluenceField extends React.PureComponent {
         isLoading: false,
         isDisabled: false,
         noOptionsMessage: undefined,
-        disableClientFilter: false,
+        filterOption: undefined,
     };
 
     constructor(props) {
@@ -96,7 +96,7 @@ export default class ConfluenceField extends React.PureComponent {
         const {
             required, fieldType, theme, label, formGroupStyle, formControlStyle,
             value, type, placeholder, name, readOnly, options, isMulti, isSearchable, testId, onInputChange, isLoading, isDisabled,
-            noOptionsMessage, disableClientFilter,
+            noOptionsMessage, filterOption,
         } = this.props;
         const requiredErrorMsg = 'This field is required.';
         let requiredError = null;
@@ -108,21 +108,6 @@ export default class ConfluenceField extends React.PureComponent {
             );
         }
         let field = null;
-        const normalizeOption = (option) => {
-            if (!option || typeof option !== 'object') {
-                const normalized = String(option ?? '');
-                return {value: normalized, label: normalized};
-            }
-
-            return {
-                ...option,
-                value: String(option.value ?? ''),
-                label: String(option.label ?? option.value ?? ''),
-            };
-        };
-
-        const normalizedOptions = Array.isArray(options) ? options.map(normalizeOption) : [];
-        const normalizedValue = Array.isArray(value) ? value.map(normalizeOption) : (value && typeof value === 'object' ? normalizeOption(value) : value);
 
         if (fieldType === 'input') {
             field = (
@@ -140,8 +125,8 @@ export default class ConfluenceField extends React.PureComponent {
             field = (
                 <Select
                     name={name}
-                    value={normalizedValue}
-                    options={normalizedOptions}
+                    value={value}
+                    options={options}
                     isMulti={isMulti}
                     isSearchable={isSearchable}
                     menuPortalTarget={document.body}
@@ -154,9 +139,7 @@ export default class ConfluenceField extends React.PureComponent {
                     noOptionsMessage={noOptionsMessage}
                     inputId={testId}
                     placeholder={placeholder}
-                    getOptionLabel={(option) => String(option?.label ?? '')}
-                    getOptionValue={(option) => String(option?.value ?? '')}
-                    filterOption={disableClientFilter ? () => true : undefined}
+                    filterOption={filterOption}
                 />
             );
         }

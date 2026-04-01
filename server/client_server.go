@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -493,7 +495,7 @@ func (csc *confluenceServerClient) GetContentWatchers(pageID string) ([]Confluen
 func (csc *confluenceServerClient) GetAvailableSpaces() ([]SpaceOption, error) {
 	response := &SpaceListResponse{}
 	path := fmt.Sprintf("%s?limit=100&status=current&type=global", PathSpaceData)
-	if _, _, err := service.CallJSONWithURL(csc.URL, path, http.MethodGet, nil, response, csc.HTTPClient); err != nil {
+	if _, _, err := csc.callJSONWithAcceptHeader(path, response); err != nil {
 		return nil, err
 	}
 
@@ -545,6 +547,51 @@ func mapSpaceOptions(spaces []SpaceResponse) []SpaceOption {
 	}
 
 	return options
+}
+
+func (csc *confluenceServerClient) callJSONWithAcceptHeader(path string, out interface{}) ([]byte, int, error) {
+	endpointURL, err := service.GetEndpointURL(csc.URL, path)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, endpointURL, nil)
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "failed to create request")
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := csc.HTTPClient.Do(req)
+	if err != nil {
+		return nil, 0, errors.Wrap(err, "request failed")
+	}
+	defer resp.Body.Close()
+
+	statusCode := resp.StatusCode
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, statusCode, errors.Wrap(err, "failed to read response body")
+	}
+
+	if statusCode == http.StatusOK || statusCode == http.StatusCreated {
+		if out != nil {
+			if err := json.Unmarshal(body, out); err != nil {
+				return body, statusCode, errors.Wrap(err, "failed to parse response JSON")
+			}
+		}
+		return body, statusCode, nil
+	}
+
+	if statusCode == http.StatusNoContent {
+		return nil, statusCode, nil
+	}
+
+	errResp := service.ErrorResponse{}
+	if json.Unmarshal(body, &errResp) == nil && errResp.Message != "" {
+		return nil, statusCode, errors.New(errResp.Message)
+	}
+
+	return nil, statusCode, errors.Errorf("unexpected response status: %d", statusCode)
 }
 
 func (csc *confluenceServerClient) SearchPages(spaceKey, query string) ([]PageOption, error) {
