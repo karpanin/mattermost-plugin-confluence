@@ -100,7 +100,7 @@ export default class AddCommentModal extends React.PureComponent {
         this.setState({selectedPage});
     };
 
-    handlePageSearch = async (query, meta) => {
+    handlePageSearch = (query, meta) => {
         if (meta?.action && meta.action !== 'input-change') {
             return query;
         }
@@ -117,9 +117,14 @@ export default class AddCommentModal extends React.PureComponent {
         const requestID = this.pageSearchRequest + 1;
         this.pageSearchRequest = requestID;
         this.setState({loadingPages: true});
-        const response = await this.props.searchCreatePageParents(this.state.selectedSpace.value, query.trim());
+        this.searchPages(requestID, this.state.selectedSpace.value, query.trim());
+        return query;
+    };
+
+    searchPages = async (requestID, spaceKey, query) => {
+        const response = await this.props.searchCreatePageParents(spaceKey, query);
         if (requestID !== this.pageSearchRequest) {
-            return query;
+            return;
         }
 
         this.setState({
@@ -127,7 +132,6 @@ export default class AddCommentModal extends React.PureComponent {
             pageOptions: normalizePageOptions(response.data),
             error: response.error ? (response.error.response?.text || 'Failed to search Confluence pages.') : '',
         });
-        return query;
     };
 
     handleSubmit = async () => {

@@ -118,7 +118,7 @@ export default class CreatePageModal extends React.PureComponent {
         this.setState({selectedParentPage});
     };
 
-    handleParentPageSearch = async (query, meta) => {
+    handleParentPageSearch = (query, meta) => {
         if (meta?.action && meta.action !== 'input-change') {
             return query;
         }
@@ -135,9 +135,15 @@ export default class CreatePageModal extends React.PureComponent {
         const requestID = this.parentSearchRequest + 1;
         this.parentSearchRequest = requestID;
         this.setState({loadingParents: true});
-        const response = await this.props.searchCreatePageParents(this.state.selectedSpace.value, query.trim());
+
+        this.searchParentPages(requestID, this.state.selectedSpace.value, query.trim());
+        return query;
+    };
+
+    searchParentPages = async (requestID, spaceKey, query) => {
+        const response = await this.props.searchCreatePageParents(spaceKey, query);
         if (requestID !== this.parentSearchRequest) {
-            return query;
+            return;
         }
 
         this.setState({
@@ -145,7 +151,6 @@ export default class CreatePageModal extends React.PureComponent {
             parentPageOptions: normalizePageOptions(response.data),
             error: response.error ? (response.error.response?.text || 'Failed to search Confluence pages.') : '',
         });
-        return query;
     };
 
     handleSubmit = async () => {
