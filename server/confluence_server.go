@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -69,7 +70,7 @@ func handleConfluenceServerWebhook(w http.ResponseWriter, r *http.Request, p *Pl
 func (p *Plugin) processConfluenceServerWebhook(body []byte) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			p.client.Log.Error("Recovered while processing Confluence server webhook", "panic", fmt.Sprintf("%v", recovered))
+			p.client.Log.Error("Recovered while processing Confluence server webhook", "panic", fmt.Sprintf("%v", recovered), "stack", string(debug.Stack()))
 		}
 	}()
 
@@ -332,39 +333,60 @@ func (p *Plugin) GetEventDataWithAPIToken(webhookPayload *serializer.ConfluenceS
 }
 
 func (p *Plugin) GetCommentDataWithAPIToken(webhookPayload *serializer.ConfluenceServerWebhookPayload, pluginConfig *config.Configuration) (*CommentResponse, error) {
-	commentResponse := &CommentResponse{}
-	path := fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10)))
+	commentID := strconv.FormatInt(webhookPayload.Comment.ID, 10)
 
-	body, statusCode, err := p.MakeHTTPCallWithAPIToken(path)
-	if err != nil || statusCode != http.StatusOK {
+	var lastErr error
+	for _, delay := range []time.Duration{0, 250 * time.Millisecond, 750 * time.Millisecond} {
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+
+		commentResponse := &CommentResponse{}
+		path := fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, commentID))
+
+		body, statusCode, err := p.MakeHTTPCallWithAPIToken(path)
+		if err == nil && statusCode == http.StatusOK {
+			if unmarshalErr := json.Unmarshal(body, commentResponse); unmarshalErr != nil {
+				return nil, errors.Wrapf(unmarshalErr, "error getting comment data with API token")
+			}
+			return commentResponse, nil
+		}
+
 		if statusCode == http.StatusNotFound {
-			commentID := strconv.FormatInt(webhookPayload.Comment.ID, 10)
 			if webhookPayload.Page.ID != 0 {
 				p.client.Log.Info("Comment lookup by content ID returned 404, trying page descendants fallback",
 					"comment_id", webhookPayload.Comment.ID,
 					"page_id", webhookPayload.Page.ID,
 					"event", webhookPayload.Event,
 				)
-				return p.GetCommentDataFromPageDescendantsWithAPIToken(strconv.FormatInt(webhookPayload.Page.ID, 10), commentID, pluginConfig)
+				comment, descendantErr := p.GetCommentDataFromPageDescendantsWithAPIToken(strconv.FormatInt(webhookPayload.Page.ID, 10), commentID, pluginConfig)
+				if descendantErr == nil {
+					return comment, nil
+				}
+				lastErr = descendantErr
+				continue
 			}
 
 			p.client.Log.Info("Comment lookup by content ID returned 404 without page ID, trying content search fallback",
 				"comment_id", webhookPayload.Comment.ID,
 				"event", webhookPayload.Event,
 			)
-			return p.SearchCommentDataByIDWithAPIToken(commentID, pluginConfig)
+			comment, searchErr := p.SearchCommentDataByIDWithAPIToken(commentID, pluginConfig)
+			if searchErr == nil {
+				return comment, nil
+			}
+			lastErr = searchErr
+			continue
 		}
+
 		if err == nil {
-			return nil, fmt.Errorf("unexpected status code %d while fetching comment %d with API token", statusCode, webhookPayload.Comment.ID)
+			lastErr = fmt.Errorf("unexpected status code %d while fetching comment %d with API token", statusCode, webhookPayload.Comment.ID)
+		} else {
+			lastErr = err
 		}
-		return nil, err
 	}
 
-	if err := json.Unmarshal(body, commentResponse); err != nil {
-		return nil, errors.Wrapf(err, "error getting comment data with API token")
-	}
-
-	return commentResponse, nil
+	return nil, lastErr
 }
 
 func (p *Plugin) GetCommentDataFromPageDescendantsWithAPIToken(pageID, commentID string, pluginConfig *config.Configuration) (*CommentResponse, error) {

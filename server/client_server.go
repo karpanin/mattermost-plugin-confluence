@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -259,20 +260,39 @@ func (csc *confluenceServerClient) GetEventData(webhookPayload *serializer.Confl
 }
 
 func (csc *confluenceServerClient) GetCommentData(webhookPayload *serializer.ConfluenceServerWebhookPayload) (*CommentResponse, error) {
-	commentResponse := &CommentResponse{}
-	commentPath := fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10))
-	if _, statusCode, err := service.CallJSONWithURL(csc.URL, commentPath, http.MethodGet, nil, commentResponse, csc.HTTPClient); err != nil {
-		if statusCode == http.StatusNotFound {
-			commentID := strconv.FormatInt(webhookPayload.Comment.ID, 10)
-			if webhookPayload.Page.ID != 0 {
-				return csc.GetCommentDataFromPageDescendants(strconv.FormatInt(webhookPayload.Page.ID, 10), commentID)
-			}
-			return csc.SearchCommentDataByID(commentID)
+	commentID := strconv.FormatInt(webhookPayload.Comment.ID, 10)
+
+	var lastErr error
+	for _, delay := range []time.Duration{0, 250 * time.Millisecond, 750 * time.Millisecond} {
+		if delay > 0 {
+			time.Sleep(delay)
 		}
-		return nil, err
+
+		commentResponse := &CommentResponse{}
+		commentPath := fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, commentID)
+		if _, statusCode, err := service.CallJSONWithURL(csc.URL, commentPath, http.MethodGet, nil, commentResponse, csc.HTTPClient); err == nil {
+			return commentResponse, nil
+		} else {
+			lastErr = err
+			if statusCode == http.StatusNotFound {
+				if webhookPayload.Page.ID != 0 {
+					comment, descendantErr := csc.GetCommentDataFromPageDescendants(strconv.FormatInt(webhookPayload.Page.ID, 10), commentID)
+					if descendantErr == nil {
+						return comment, nil
+					}
+					lastErr = descendantErr
+				} else {
+					comment, searchErr := csc.SearchCommentDataByID(commentID)
+					if searchErr == nil {
+						return comment, nil
+					}
+					lastErr = searchErr
+				}
+			}
+		}
 	}
 
-	return commentResponse, nil
+	return nil, lastErr
 }
 
 func (csc *confluenceServerClient) GetCommentDataFromPageDescendants(pageID, commentID string) (*CommentResponse, error) {

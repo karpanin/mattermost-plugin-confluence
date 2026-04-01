@@ -3,7 +3,7 @@ import {changeOpacity} from 'mattermost-redux/utils/theme_utils';
 // from https://github.com/mattermost/mattermost-plugin-jira/blob/master/webapp/src/utils/styles.js#L6
 export const getStyleForReactSelect = (theme) => {
     if (!theme) {
-        return null;
+        return {};
     }
 
     return {
@@ -82,7 +82,7 @@ export const getStyleForReactSelect = (theme) => {
             ...provided,
             color: theme.centerChannelColor,
         }),
-        is: (provided) => ({
+        dropdownIndicator: (provided) => ({
             ...provided,
 
             '&:hover': {
