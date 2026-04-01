@@ -235,6 +235,7 @@ export default class CreatePageModal extends React.PureComponent {
                         removeValidation={this.validator.removeValidation}
                         onChange={this.handleParentPageChange}
                         onInputChange={this.handleParentPageSearch}
+                        disableClientFilter={true}
                         isDisabled={!this.state.selectedSpace}
                         isLoading={loadingParents}
                         noOptionsMessage={() => {

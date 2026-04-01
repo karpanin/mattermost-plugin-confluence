@@ -204,6 +204,7 @@ export default class AddCommentModal extends React.PureComponent {
                         removeValidation={this.validator.removeValidation}
                         onChange={this.handlePageChange}
                         onInputChange={this.handlePageSearch}
+                        disableClientFilter={true}
                         isDisabled={!this.state.selectedSpace}
                         isLoading={loadingPages}
                         noOptionsMessage={() => {
