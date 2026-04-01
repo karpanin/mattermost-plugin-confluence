@@ -28,14 +28,18 @@ class PluginClass {
         getSubscriptionAccess()(store.dispatch);
         registry.registerPostDropdownMenuAction({
             text: CreatePageAction,
-            action: (postId) => {
+            action: async (postId) => {
                 const state = store.getState();
                 const post = getPost(state, postId);
                 if (!post || isSystemMessage(post)) {
                     return;
                 }
 
-                const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
+                const {data: subscriptionAccessData, error} = await getSubscriptionAccess()(store.dispatch);
+                if (error) {
+                    return;
+                }
+
                 if (subscriptionAccessData?.is_configured === false) {
                     return;
                 }
@@ -45,7 +49,7 @@ class PluginClass {
                     return;
                 }
 
-                if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command || Object.keys(subscriptionAccessData || {}).length === 0) {
+                if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command) {
                     store.dispatch(openCreatePageModal(postId));
                     return;
                 }
@@ -60,14 +64,18 @@ class PluginClass {
 
         registry.registerPostDropdownMenuAction({
             text: AddCommentAction,
-            action: (postId) => {
+            action: async (postId) => {
                 const state = store.getState();
                 const post = getPost(state, postId);
                 if (!post || isSystemMessage(post)) {
                     return;
                 }
 
-                const subscriptionAccessData = Selectors.getSubscriptionAccess(state);
+                const {data: subscriptionAccessData, error} = await getSubscriptionAccess()(store.dispatch);
+                if (error) {
+                    return;
+                }
+
                 if (subscriptionAccessData?.is_configured === false) {
                     return;
                 }
@@ -77,7 +85,7 @@ class PluginClass {
                     return;
                 }
 
-                if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command || Object.keys(subscriptionAccessData || {}).length === 0) {
+                if (subscriptionAccessData?.is_connected || subscriptionAccessData?.can_run_subscribe_command) {
                     store.dispatch(openAddCommentModal(postId));
                     return;
                 }

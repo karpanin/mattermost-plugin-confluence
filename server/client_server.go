@@ -189,6 +189,18 @@ type ContentSearchResponse struct {
 	Results []CreatedPage `json:"results"`
 }
 
+type CommentSearchResponse struct {
+	Results []CommentResponse `json:"results"`
+	Size    int               `json:"size"`
+	Limit   int               `json:"limit"`
+	Start   int               `json:"start"`
+}
+
+type DescendantCommentSearchResponse struct {
+	Results []CommentResponse     `json:"results"`
+	Comment CommentSearchResponse `json:"comment"`
+}
+
 type ConfluenceServerEvent struct {
 	Comment *CommentResponse
 	Page    *PageResponse
@@ -248,11 +260,48 @@ func (csc *confluenceServerClient) GetEventData(webhookPayload *serializer.Confl
 
 func (csc *confluenceServerClient) GetCommentData(webhookPayload *serializer.ConfluenceServerWebhookPayload) (*CommentResponse, error) {
 	commentResponse := &CommentResponse{}
-	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s%s?expand=body.view,body.storage,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10)), http.MethodGet, nil, commentResponse, csc.HTTPClient); err != nil {
+	commentPath := fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10))
+	if _, statusCode, err := service.CallJSONWithURL(csc.URL, commentPath, http.MethodGet, nil, commentResponse, csc.HTTPClient); err != nil {
+		if statusCode == http.StatusNotFound && webhookPayload.Page.ID != 0 {
+			return csc.GetCommentDataFromPageDescendants(strconv.FormatInt(webhookPayload.Page.ID, 10), strconv.FormatInt(webhookPayload.Comment.ID, 10))
+		}
 		return nil, err
 	}
 
 	return commentResponse, nil
+}
+
+func (csc *confluenceServerClient) GetCommentDataFromPageDescendants(pageID, commentID string) (*CommentResponse, error) {
+	const descendantPageSize = 200
+
+	for start := 0; ; start += descendantPageSize {
+		response := &DescendantCommentSearchResponse{}
+		path := fmt.Sprintf("%s%s/descendant/comment?expand=body.view,body.storage,container,space,history&start=%d&limit=%d", PathContentData, pageID, start, descendantPageSize)
+		if _, _, err := service.CallJSONWithURL(csc.URL, path, http.MethodGet, nil, response, csc.HTTPClient); err != nil {
+			return nil, err
+		}
+
+		comments := getDescendantComments(response)
+		for i := range comments {
+			if comments[i].ID == commentID {
+				return &comments[i], nil
+			}
+		}
+
+		if len(comments) < descendantPageSize {
+			break
+		}
+	}
+
+	return nil, errors.Errorf("comment %s not found in descendants for page %s", commentID, pageID)
+}
+
+func getDescendantComments(response *DescendantCommentSearchResponse) []CommentResponse {
+	if len(response.Results) > 0 {
+		return response.Results
+	}
+
+	return response.Comment.Results
 }
 
 func (csc *confluenceServerClient) GetPageData(pageID int) (*PageResponse, error) {

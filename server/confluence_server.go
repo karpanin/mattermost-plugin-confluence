@@ -78,6 +78,15 @@ func (p *Plugin) processConfluenceServerWebhook(body []byte) {
 		return
 	}
 
+	p.client.Log.Info("Processing Confluence server webhook event",
+		"event", event.Event,
+		"user_key", event.UserKey,
+		"comment_id", event.Comment.ID,
+		"page_id", event.Page.ID,
+		"space_id", event.Space.ID,
+		"space_key", event.Space.SpaceKey,
+	)
+
 	pluginConfig := config.GetConfig()
 	instanceID := pluginConfig.ConfluenceURL
 	notification := p.getNotification()
@@ -102,7 +111,15 @@ func (p *Plugin) processConfluenceServerWebhook(body []byte) {
 
 			eventData, eventErr := p.GetEventDataWithAPIToken(event, pluginConfig)
 			if eventErr != nil {
-				p.client.Log.Error("Error getting event data with API token", "error", eventErr)
+				p.client.Log.Error("Error getting event data with API token",
+					"error", eventErr,
+					"event", event.Event,
+					"user_key", event.UserKey,
+					"comment_id", event.Comment.ID,
+					"page_id", event.Page.ID,
+					"space_id", event.Space.ID,
+					"space_key", event.Space.SpaceKey,
+				)
 				return
 			}
 
@@ -133,7 +150,15 @@ func (p *Plugin) processConfluenceServerWebhook(body []byte) {
 
 	eventData, eventErr := p.GetEventData(event, client)
 	if eventErr != nil {
-		p.client.Log.Error("Error getting event data for the Confluence server webhook", "error", eventErr.Error())
+		p.client.Log.Error("Error getting event data for the Confluence server webhook",
+			"error", eventErr.Error(),
+			"event", event.Event,
+			"user_key", event.UserKey,
+			"comment_id", event.Comment.ID,
+			"page_id", event.Page.ID,
+			"space_id", event.Space.ID,
+			"space_key", event.Space.SpaceKey,
+		)
 		return
 	}
 
@@ -278,10 +303,18 @@ func (p *Plugin) GetEventDataWithAPIToken(webhookPayload *serializer.ConfluenceS
 
 func (p *Plugin) GetCommentDataWithAPIToken(webhookPayload *serializer.ConfluenceServerWebhookPayload, pluginConfig *config.Configuration) (*CommentResponse, error) {
 	commentResponse := &CommentResponse{}
-	path := fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, fmt.Sprintf("%s%s?expand=body.view,body.storage,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10)))
+	path := fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, strconv.FormatInt(webhookPayload.Comment.ID, 10)))
 
 	body, statusCode, err := p.MakeHTTPCallWithAPIToken(path)
 	if err != nil || statusCode != http.StatusOK {
+		if statusCode == http.StatusNotFound && webhookPayload.Page.ID != 0 {
+			p.client.Log.Info("Comment lookup by content ID returned 404, trying page descendants fallback",
+				"comment_id", webhookPayload.Comment.ID,
+				"page_id", webhookPayload.Page.ID,
+				"event", webhookPayload.Event,
+			)
+			return p.GetCommentDataFromPageDescendantsWithAPIToken(strconv.FormatInt(webhookPayload.Page.ID, 10), strconv.FormatInt(webhookPayload.Comment.ID, 10), pluginConfig)
+		}
 		return nil, err
 	}
 
@@ -290,6 +323,36 @@ func (p *Plugin) GetCommentDataWithAPIToken(webhookPayload *serializer.Confluenc
 	}
 
 	return commentResponse, nil
+}
+
+func (p *Plugin) GetCommentDataFromPageDescendantsWithAPIToken(pageID, commentID string, pluginConfig *config.Configuration) (*CommentResponse, error) {
+	const descendantPageSize = 200
+
+	for start := 0; ; start += descendantPageSize {
+		response := &DescendantCommentSearchResponse{}
+		path := fmt.Sprintf("%s%s/descendant/comment?expand=body.view,body.storage,container,space,history&start=%d&limit=%d", PathContentData, pageID, start, descendantPageSize)
+		body, statusCode, err := p.MakeHTTPCallWithAPIToken(fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, path))
+		if err != nil || statusCode != http.StatusOK {
+			return nil, err
+		}
+
+		if err := json.Unmarshal(body, response); err != nil {
+			return nil, errors.Wrapf(err, "error getting descendant comment data with API token")
+		}
+
+		comments := getDescendantComments(response)
+		for i := range comments {
+			if comments[i].ID == commentID {
+				return &comments[i], nil
+			}
+		}
+
+		if len(comments) < descendantPageSize {
+			break
+		}
+	}
+
+	return nil, errors.Errorf("comment %s not found in descendants for page %s", commentID, pageID)
 }
 
 func (p *Plugin) GetPageDataWithAPIToken(pageID int, pluginConfig *config.Configuration) (*PageResponse, error) {
