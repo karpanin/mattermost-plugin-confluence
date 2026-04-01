@@ -445,7 +445,7 @@ func (p *Plugin) SearchCommentDataByIDWithAPIToken(commentID string, pluginConfi
 
 func (p *Plugin) GetPageDataWithAPIToken(pageID int, pluginConfig *config.Configuration) (*PageResponse, error) {
 	pageResponse := &PageResponse{}
-	path := fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, strconv.Itoa(pageID)))
+	path := fmt.Sprintf("%s%s", pluginConfig.ConfluenceURL, fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history.previousVersion,version", PathContentData, strconv.Itoa(pageID)))
 
 	body, statusCode, err := p.MakeHTTPCallWithAPIToken(path)
 	if err != nil || statusCode != http.StatusOK {
@@ -457,6 +457,40 @@ func (p *Plugin) GetPageDataWithAPIToken(pageID int, pluginConfig *config.Config
 	}
 
 	return pageResponse, nil
+}
+
+func (p *Plugin) GetPreviousPageVersionWithAPIToken(pageID string, currentVersion int, pluginConfig *config.Configuration) (*PageResponse, error) {
+	if currentVersion <= 1 {
+		return nil, nil
+	}
+
+	previousVersion := currentVersion - 1
+	pageResponse := &PageResponse{}
+
+	primaryPath := fmt.Sprintf("%s%s%s?status=historical&version=%d&expand=body.view,body.storage,space,history.previousVersion,version", pluginConfig.ConfluenceURL, PathContentData, pageID, previousVersion)
+	body, statusCode, err := p.MakeHTTPCallWithAPIToken(primaryPath)
+	if err == nil && statusCode == http.StatusOK {
+		if err := json.Unmarshal(body, pageResponse); err != nil {
+			return nil, errors.Wrapf(err, "error getting historical page data with API token")
+		}
+		return pageResponse, nil
+	}
+
+	response := &PageVersionResponse{}
+	fallbackPath := fmt.Sprintf("%s%s%s/version/%d?expand=content.body.view,content.body.storage,content.space,content.history.previousVersion,content.version", pluginConfig.ConfluenceURL, PathContentData, pageID, previousVersion)
+	body, statusCode, err = p.MakeHTTPCallWithAPIToken(fallbackPath)
+	if err != nil || statusCode != http.StatusOK {
+		if err == nil {
+			return nil, fmt.Errorf("unexpected status code %d while fetching previous page version %d with API token", statusCode, previousVersion)
+		}
+		return nil, err
+	}
+
+	if err := json.Unmarshal(body, response); err != nil {
+		return nil, errors.Wrapf(err, "error getting previous page version data with API token")
+	}
+
+	return &response.Content, nil
 }
 
 func (p *Plugin) GetSpaceDataWithAPIToken(spaceKey string, pluginConfig *config.Configuration) (*SpaceResponse, error) {

@@ -83,7 +83,16 @@ type CreatedBy struct {
 }
 
 type History struct {
-	CreatedBy CreatedBy `json:"createdBy"`
+	CreatedBy       CreatedBy       `json:"createdBy"`
+	PreviousVersion *HistoryVersion `json:"previousVersion"`
+}
+
+type Version struct {
+	Number int `json:"number"`
+}
+
+type HistoryVersion struct {
+	Number int `json:"number"`
 }
 
 type ContentBodyStorage struct {
@@ -120,6 +129,11 @@ type PageResponse struct {
 	Body    Body          `json:"body"`
 	Links   Links         `json:"_links"`
 	History History       `json:"history"`
+	Version Version       `json:"version"`
+}
+
+type PageVersionResponse struct {
+	Content PageResponse `json:"content"`
 }
 
 type CreatePageInput struct {
@@ -349,11 +363,35 @@ func getDescendantComments(response *DescendantCommentSearchResponse) []CommentR
 
 func (csc *confluenceServerClient) GetPageData(pageID int) (*PageResponse, error) {
 	pageResponse := &PageResponse{}
-	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history", PathContentData, strconv.Itoa(pageID)), http.MethodGet, nil, pageResponse, csc.HTTPClient); err != nil {
+	if _, _, err := service.CallJSONWithURL(csc.URL, fmt.Sprintf("%s%s?status=any&expand=body.view,body.storage,container,space,history.previousVersion,version", PathContentData, strconv.Itoa(pageID)), http.MethodGet, nil, pageResponse, csc.HTTPClient); err != nil {
 		return nil, err
 	}
 
 	return pageResponse, nil
+}
+
+func (csc *confluenceServerClient) GetPreviousPageVersion(pageID string, currentVersion int) (*PageResponse, error) {
+	if currentVersion <= 1 {
+		return nil, nil
+	}
+
+	previousVersion := currentVersion - 1
+
+	// Prefer the content endpoint with historical status for previous bodies.
+	pageResponse := &PageResponse{}
+	path := fmt.Sprintf("%s%s?status=historical&version=%d&expand=body.view,body.storage,space,history.previousVersion,version", PathContentData, pageID, previousVersion)
+	if _, _, err := service.CallJSONWithURL(csc.URL, path, http.MethodGet, nil, pageResponse, csc.HTTPClient); err == nil {
+		return pageResponse, nil
+	}
+
+	// Fallback for Server/DC variants that expose the body through the version resource.
+	response := &PageVersionResponse{}
+	versionPath := fmt.Sprintf("%s%s/version/%d?expand=content.body.view,content.body.storage,content.space,content.history.previousVersion,content.version", PathContentData, pageID, previousVersion)
+	if _, _, err := service.CallJSONWithURL(csc.URL, versionPath, http.MethodGet, nil, response, csc.HTTPClient); err != nil {
+		return nil, err
+	}
+
+	return &response.Content, nil
 }
 
 func (csc *confluenceServerClient) GetSpaceData(spaceKey string) (*SpaceResponse, error) {

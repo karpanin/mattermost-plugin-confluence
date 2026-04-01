@@ -62,3 +62,30 @@ func TestBuildPersonalNotificationMessage(t *testing.T) {
 	watchingMessage := buildPersonalNotificationMessage(notificationTypeWatching, serializer.PageUpdatedEvent, event, "https://conf.example.com", "Alice")
 	assert.Contains(t, watchingMessage, "You are watching this page in Confluence")
 }
+
+func TestBuildPersonalNotificationMessageForPageMention(t *testing.T) {
+	event := &ConfluenceServerEvent{
+		Page: &PageResponse{
+			Title: "Architecture page",
+			Space: SpaceResponse{
+				Key:   "ENG",
+				Name:  "Engineering",
+				Links: Links{Self: "/spaces/ENG"},
+			},
+			Body: Body{
+				View: View{
+					Value: `<p><a class="confluence-userlink user-mention" data-linked-resource-id="user-key-3">@Alice</a> Please review this section.</p>`,
+				},
+			},
+			Links: Links{Self: "/pages/123"},
+		},
+	}
+
+	createdMessage := buildPersonalNotificationMessage(notificationTypeMention, serializer.PageCreatedEvent, event, "https://conf.example.com", "Alice")
+	assert.Contains(t, createdMessage, "Alice mentioned you on")
+	assert.Contains(t, createdMessage, "Architecture page")
+	assert.Contains(t, createdMessage, "> @Alice Please review this section.")
+
+	updatedMessage := buildPersonalNotificationMessage(notificationTypeMention, serializer.PageUpdatedEvent, event, "https://conf.example.com", "Alice")
+	assert.Contains(t, updatedMessage, "Alice mentioned you on")
+}

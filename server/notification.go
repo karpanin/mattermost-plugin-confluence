@@ -168,6 +168,12 @@ func (n *notification) sendPersonalNotifications(event serializer.ConfluenceEven
 		}
 	}
 
+	if eventType == serializer.PageCreatedEvent || eventType == serializer.PageUpdatedEvent {
+		for _, userID := range n.resolvePageMentionedUserIDs(baseURL, event, eventType, eventTriggererKey) {
+			recipients[userID] = notificationTypeMention
+		}
+	}
+
 	if eventType == serializer.PageUpdatedEvent {
 		for _, userID := range n.resolveWatcherUserIDs(pageID, baseURL, eventTriggererKey) {
 			if _, exists := recipients[userID]; !exists {
@@ -207,6 +213,74 @@ func (n *notification) resolveMentionedUserIDs(instanceID string, event serializ
 	}
 
 	return mapKeys(mentionedIDs)
+}
+
+func (n *notification) resolvePageMentionedUserIDs(instanceID string, event serializer.ConfluenceEventV2, eventType, eventTriggererKey string) []string {
+	serverEvent, ok := event.(*ConfluenceServerEvent)
+	if !ok || serverEvent.Page == nil {
+		return nil
+	}
+
+	currentUserIDs := n.resolveMattermostUserIDsFromMentionSource(instanceID, getPageMentionSource(serverEvent.Page), eventTriggererKey)
+	if len(currentUserIDs) == 0 {
+		return nil
+	}
+
+	if eventType == serializer.PageUpdatedEvent {
+		previousPage, err := n.getPreviousPageForMentions(instanceID, serverEvent, eventTriggererKey)
+		if err != nil {
+			n.API.LogError("Unable to get previous page version for page mention notifications", "PageID", serverEvent.Page.ID, "Error", err.Error())
+		}
+
+		previousUserIDs := map[string]struct{}{}
+		if previousPage != nil {
+			previousUserIDs = n.resolveMattermostUserIDsFromMentionSource(instanceID, getPageMentionSource(previousPage), eventTriggererKey)
+		}
+
+		newUserIDs := map[string]struct{}{}
+		for userID := range currentUserIDs {
+			if _, exists := previousUserIDs[userID]; !exists {
+				newUserIDs[userID] = struct{}{}
+			}
+		}
+		return mapKeys(newUserIDs)
+	}
+
+	return mapKeys(currentUserIDs)
+}
+
+func (n *notification) getPreviousPageForMentions(instanceID string, event *ConfluenceServerEvent, eventTriggererKey string) (*PageResponse, error) {
+	if event == nil || event.Page == nil || event.Page.Version.Number <= 1 {
+		return nil, nil
+	}
+
+	if client, _, err := n.GetClientFromUserKey(instanceID, eventTriggererKey); err == nil {
+		return client.(*confluenceServerClient).GetPreviousPageVersion(event.Page.ID, event.Page.Version.Number)
+	}
+
+	pluginConfig := config.GetConfig()
+	if pluginConfig.AdminAPIToken == "" {
+		return nil, nil
+	}
+
+	return n.GetPreviousPageVersionWithAPIToken(event.Page.ID, event.Page.Version.Number, pluginConfig)
+}
+
+func (n *notification) resolveMattermostUserIDsFromMentionSource(instanceID, body, eventTriggererKey string) map[string]struct{} {
+	mmUserIDs := map[string]struct{}{}
+	for _, identifier := range extractMentionIdentifiers(body) {
+		if identifier == "" || identifier == eventTriggererKey {
+			continue
+		}
+
+		mmUserID, err := store.GetMattermostUserIDFromConfluenceID(instanceID, identifier)
+		if err != nil || mmUserID == nil || *mmUserID == "" {
+			continue
+		}
+		mmUserIDs[*mmUserID] = struct{}{}
+	}
+
+	return mmUserIDs
 }
 
 func (n *notification) resolveWatcherUserIDs(pageID, instanceID, eventTriggererKey string) []string {
@@ -292,17 +366,29 @@ func buildPersonalNotificationMessage(reason, eventType string, event serializer
 
 	switch reason {
 	case notificationTypeMention:
-		if serverEvent.Comment == nil {
-			return ""
+		if serverEvent.Comment != nil {
+			pageName := serverEvent.GetPageDisplayNameForCommentEvents(baseURL)
+			spaceName := serverEvent.GetSpaceDisplayNameForCommentEvents(baseURL)
+			commentURL := joinURL(baseURL, serverEvent.Comment.Links.Self)
+			commentExcerpt := getCommentExcerpt(serverEvent.Comment)
+			if commentExcerpt != "" {
+				return fmt.Sprintf("%s mentioned you in a [comment](%s) on %s in %s.\n> %s", eventTriggerer, commentURL, pageName, spaceName, strings.ReplaceAll(commentExcerpt, "\n", "\n> "))
+			}
+			return fmt.Sprintf("%s mentioned you in a [comment](%s) on %s in %s.", eventTriggerer, commentURL, pageName, spaceName)
 		}
-		pageName := serverEvent.GetPageDisplayNameForCommentEvents(baseURL)
-		spaceName := serverEvent.GetSpaceDisplayNameForCommentEvents(baseURL)
-		commentURL := joinURL(baseURL, serverEvent.Comment.Links.Self)
-		commentExcerpt := getCommentExcerpt(serverEvent.Comment)
-		if commentExcerpt != "" {
-			return fmt.Sprintf("%s mentioned you in a [comment](%s) on %s in %s.\n> %s", eventTriggerer, commentURL, pageName, spaceName, strings.ReplaceAll(commentExcerpt, "\n", "\n> "))
+
+		if serverEvent.Page != nil && (eventType == serializer.PageCreatedEvent || eventType == serializer.PageUpdatedEvent) {
+			pageName := serverEvent.GetPageDisplayNameForPageEvents(baseURL)
+			spaceName := serverEvent.GetSpaceDisplayNameForPageEvents(baseURL)
+			pageURL := joinURL(baseURL, serverEvent.Page.Links.Self)
+			pageExcerpt := getPageExcerpt(serverEvent.Page)
+			if pageExcerpt != "" {
+				return fmt.Sprintf("%s mentioned you on %s in %s.\n> %s", eventTriggerer, pageName, spaceName, strings.ReplaceAll(pageExcerpt, "\n", "\n> "))
+			}
+			return fmt.Sprintf("%s mentioned you on [this page](%s) in %s.", eventTriggerer, pageURL, spaceName)
 		}
-		return fmt.Sprintf("%s mentioned you in a [comment](%s) on %s in %s.", eventTriggerer, commentURL, pageName, spaceName)
+
+		return ""
 	case notificationTypeWatching:
 		if eventType != serializer.PageUpdatedEvent || serverEvent.Page == nil {
 			return ""
@@ -353,6 +439,31 @@ func getCommentExcerpt(comment *CommentResponse) string {
 	}
 
 	return strings.TrimSpace(util.GetBodyForExcerpt(comment.Body.Storage.Value))
+}
+
+func getPageMentionSource(page *PageResponse) string {
+	if page == nil {
+		return ""
+	}
+
+	body := strings.TrimSpace(page.Body.Storage.Value)
+	if body != "" {
+		return body
+	}
+
+	return strings.TrimSpace(page.Body.View.Value)
+}
+
+func getPageExcerpt(page *PageResponse) string {
+	if page == nil {
+		return ""
+	}
+
+	if excerpt := strings.TrimSpace(util.GetBodyForExcerpt(page.Body.View.Value)); excerpt != "" {
+		return excerpt
+	}
+
+	return strings.TrimSpace(util.GetBodyForExcerpt(page.Body.Storage.Value))
 }
 
 func mapKeys(values map[string]struct{}) []string {
