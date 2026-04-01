@@ -36,6 +36,7 @@ var Endpoints = map[string]*Endpoint{
 	getEndpointKey(userConnect):                         userConnect,
 	getEndpointKey(userConnectComplete):                 userConnectComplete,
 	getEndpointKey(userConnectionInfo):                  userConnectionInfo,
+	getEndpointKey(debugOAuthToken):                     debugOAuthToken,
 	getEndpointKey(getPluginConfig):                     getPluginConfig,
 	getEndpointKey(createPageFromPost):                  createPageFromPost,
 	getEndpointKey(addCommentToPageFromPost):            addCommentToPageFromPost,
