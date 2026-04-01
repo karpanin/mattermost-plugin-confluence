@@ -33,7 +33,17 @@ func TestGetDescendantCommentsFromCommentEnvelope(t *testing.T) {
 func TestFormatMattermostPostForConfluenceMarkdown(t *testing.T) {
 	body := formatMattermostPostForConfluence("# Title\n\nThis is **bold** and *italic* with a [link](https://example.com).", "https://mattermost.example.com/_redirect/pl/abc")
 
-	require.Contains(t, body, "<p># Title</p>")
-	require.Contains(t, body, "<p>This is **bold** and *italic* with a [link](https://example.com).</p>")
+	require.Contains(t, body, "<h1>Title</h1>")
+	require.Contains(t, body, "<strong>bold</strong>")
+	require.Contains(t, body, "<em>italic</em>")
+	require.Contains(t, body, "<a href=\"https://example.com\">link</a>")
 	require.Contains(t, body, "View original message in Mattermost")
+}
+
+func TestFormatMattermostPostForConfluenceCodeBlock(t *testing.T) {
+	body := formatMattermostPostForConfluence("```go\nfmt.Println(\"hi\")\n```", "https://mattermost.example.com/_redirect/pl/abc")
+
+	require.Contains(t, body, "<ac:structured-macro ac:name=\"code\">")
+	require.Contains(t, body, "<ac:parameter ac:name=\"language\">go</ac:parameter>")
+	require.Contains(t, body, "fmt.Println(\"hi\")")
 }

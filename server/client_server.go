@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -450,7 +449,7 @@ func (csc *confluenceServerClient) CreatePage(in *CreatePageInput) (*CreatedPage
 	}
 
 	created := &CreatedPage{}
-	if _, _, err := csc.callJSONWithAcceptHeaderAndBody(http.MethodPost, PathContentData, payload, created); err != nil {
+	if _, _, err := service.CallJSONWithURL(csc.URL, PathContentData, http.MethodPost, payload, created, csc.HTTPClient); err != nil {
 		return nil, err
 	}
 
@@ -547,32 +546,16 @@ func mapSpaceOptions(spaces []SpaceResponse) []SpaceOption {
 }
 
 func (csc *confluenceServerClient) callJSONWithAcceptHeader(path string, out interface{}) ([]byte, int, error) {
-	return csc.callJSONWithAcceptHeaderAndBody(http.MethodGet, path, nil, out)
-}
-
-func (csc *confluenceServerClient) callJSONWithAcceptHeaderAndBody(method, path string, in, out interface{}) ([]byte, int, error) {
 	endpointURL, err := service.GetEndpointURL(csc.URL, path)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	var inBody io.Reader
-	if in != nil {
-		buf := &bytes.Buffer{}
-		if err := json.NewEncoder(buf).Encode(in); err != nil {
-			return nil, 0, err
-		}
-		inBody = buf
-	}
-
-	req, err := http.NewRequest(method, endpointURL, inBody)
+	req, err := http.NewRequest(http.MethodGet, endpointURL, nil)
 	if err != nil {
 		return nil, 0, errors.Wrap(err, "failed to create request")
 	}
 	req.Header.Set("Accept", "application/json")
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
 
 	resp, err := csc.HTTPClient.Do(req)
 	if err != nil {
@@ -633,32 +616,32 @@ func (csc *confluenceServerClient) SearchPages(spaceKey, query string) ([]PageOp
 }
 
 func formatMattermostPostForConfluence(postMessage, permalink string) string {
-	return formatMattermostPostForConfluenceLegacy(postMessage, permalink)
-}
-
-func formatMattermostPostForConfluenceLegacy(postMessage, permalink string) string {
 	message := strings.TrimSpace(postMessage)
 	if message == "" {
 		message = "_Original Mattermost message did not contain text._"
 	}
 
-	lines := strings.Split(message, "\n")
-	paragraphs := make([]string, 0, len(lines))
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+	body, err := renderMattermostMarkdownToConfluenceStorage(message)
+	if err != nil || strings.TrimSpace(body) == "" {
+		lines := strings.Split(message, "\n")
+		paragraphs := make([]string, 0, len(lines))
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			paragraphs = append(paragraphs, "<p>"+html.EscapeString(line)+"</p>")
 		}
-		paragraphs = append(paragraphs, "<p>"+html.EscapeString(line)+"</p>")
+
+		if len(paragraphs) == 0 {
+			paragraphs = append(paragraphs, "<p><em>Original Mattermost message did not contain text.</em></p>")
+		}
+
+		body = strings.Join(paragraphs, "")
 	}
 
-	if len(paragraphs) == 0 {
-		paragraphs = append(paragraphs, "<p><em>Original Mattermost message did not contain text.</em></p>")
-	}
-
-	paragraphs = append(paragraphs, fmt.Sprintf("<p><a href=\"%s\">View original message in Mattermost</a></p>", html.EscapeString(permalink)))
-
-	return strings.Join(paragraphs, "")
+	body += fmt.Sprintf("<p><a href=\"%s\">View original message in Mattermost</a></p>", html.EscapeString(permalink))
+	return body
 }
 
 func escapeCQL(value string) string {
