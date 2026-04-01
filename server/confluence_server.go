@@ -87,6 +87,18 @@ func (p *Plugin) processConfluenceServerWebhook(body []byte) {
 		"space_key", event.Space.SpaceKey,
 	)
 
+	if !isSupportedServerWebhookEvent(event.Event) {
+		p.client.Log.Info("Skipping unsupported Confluence server webhook event",
+			"event", event.Event,
+			"user_key", event.UserKey,
+			"comment_id", event.Comment.ID,
+			"page_id", event.Page.ID,
+			"space_id", event.Space.ID,
+			"space_key", event.Space.SpaceKey,
+		)
+		return
+	}
+
 	pluginConfig := config.GetConfig()
 	instanceID := pluginConfig.ConfluenceURL
 	notification := p.getNotification()
@@ -182,6 +194,23 @@ func (p *Plugin) processConfluenceServerWebhook(body []byte) {
 	}
 
 	notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName, event.UserKey)
+}
+
+func isSupportedServerWebhookEvent(eventType string) bool {
+	switch eventType {
+	case
+		serializer.PageCreatedEvent,
+		serializer.PageUpdatedEvent,
+		serializer.PageTrashedEvent,
+		serializer.PageRestoredEvent,
+		serializer.PageRemovedEvent,
+		serializer.CommentCreatedEvent,
+		serializer.CommentUpdatedEvent,
+		serializer.SpaceUpdatedEvent:
+		return true
+	default:
+		return false
+	}
 }
 
 func (p *Plugin) GetEventData(webhookPayload *serializer.ConfluenceServerWebhookPayload, client Client) (*ConfluenceServerEvent, error) {

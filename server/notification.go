@@ -251,6 +251,9 @@ func (n *notification) sendPersonalNotificationToUser(userID, reason, eventType 
 	if err != nil {
 		return err
 	}
+	if connection == nil {
+		return errors.New("connection is nil")
+	}
 
 	if !connection.ShouldReceiveNotification(reason) {
 		return nil
@@ -264,6 +267,9 @@ func (n *notification) sendPersonalNotificationToUser(userID, reason, eventType 
 	channel, appErr := n.client.Channel.GetDirect(userID, botUserID)
 	if appErr != nil {
 		return errors.New(appErr.Error())
+	}
+	if channel == nil {
+		return errors.New("direct channel is nil")
 	}
 
 	_, appErr = n.API.CreatePost(&model.Post{
