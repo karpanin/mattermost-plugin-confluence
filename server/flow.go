@@ -179,6 +179,10 @@ func (fm *FlowManager) StartSetupWizard(userID string, delegatedFrom string) err
 }
 
 func (fm *FlowManager) StartCompletionWizard(userID string) error {
+	if !util.IsSystemAdmin(userID) {
+		return nil
+	}
+
 	state := fm.getBaseState()
 
 	if err := fm.completionFlow.ForUser(userID).Start(state); err != nil {
