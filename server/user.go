@@ -283,8 +283,10 @@ func (p *Plugin) connectUser(instanceID, mattermostUserID string, connection *ty
 		return err
 	}
 
-	if err = p.flowManager.StartCompletionWizard(mattermostUserID); err != nil {
-		return err
+	if connection.IsAdmin {
+		if err = p.flowManager.StartCompletionWizard(mattermostUserID); err != nil {
+			return err
+		}
 	}
 
 	return nil
