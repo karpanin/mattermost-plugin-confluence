@@ -536,37 +536,6 @@ func (csc *confluenceServerClient) GetAvailableSpaces() ([]SpaceOption, error) {
 	return mapSpaceOptions(response.Results), nil
 }
 
-func (csc *confluenceServerClient) GetAvailableSpacesFromAccessibleContent() ([]SpaceOption, error) {
-	const pageSize = 50
-	spaceByKey := map[string]SpaceResponse{}
-
-	for start := 0; start < 200; start += pageSize {
-		path := fmt.Sprintf("%s?type=page&status=current&limit=%d&start=%d&expand=space", PathContentData, pageSize, start)
-		response := &ContentSearchResponse{}
-		if _, _, err := service.CallJSONWithURL(csc.URL, path, http.MethodGet, nil, response, csc.HTTPClient); err != nil {
-			return nil, err
-		}
-
-		for _, result := range response.Results {
-			if strings.TrimSpace(result.Space.Key) == "" {
-				continue
-			}
-			spaceByKey[result.Space.Key] = result.Space
-		}
-
-		if len(response.Results) < pageSize || len(spaceByKey) >= 100 {
-			break
-		}
-	}
-
-	spaces := make([]SpaceResponse, 0, len(spaceByKey))
-	for _, space := range spaceByKey {
-		spaces = append(spaces, space)
-	}
-
-	return mapSpaceOptions(spaces), nil
-}
-
 func mapSpaceOptions(spaces []SpaceResponse) []SpaceOption {
 	options := make([]SpaceOption, 0, len(spaces))
 	for _, result := range spaces {

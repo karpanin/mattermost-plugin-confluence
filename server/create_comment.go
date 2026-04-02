@@ -135,8 +135,7 @@ func handleAddCommentToPageFromPost(w http.ResponseWriter, r *http.Request, p *P
 	}
 
 	if err = publishThreadPost(p, userID, post.ChannelId, threadID, fmt.Sprintf("Added Confluence comment to [%s](%s)", page.Title, pageURL)); err != nil {
-		http.Error(w, "Confluence comment was created, but publishing the Mattermost thread post failed.", http.StatusInternalServerError)
-		return
+		p.client.Log.Error("Confluence comment was created, but publishing the Mattermost thread post failed", "user_id", userID, "thread_id", threadID, "page_id", page.ID, "comment_id", createdComment.ID, "error", err.Error())
 	}
 
 	_ = p.API.SendEphemeralPost(userID, &model.Post{

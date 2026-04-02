@@ -6,12 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
+	stderrors "errors"
+	errors "github.com/pkg/errors"
 
 	"github.com/mattermost/mattermost-plugin-confluence/server/config"
 	"github.com/mattermost/mattermost-plugin-confluence/server/serializer"
@@ -51,10 +51,14 @@ func handleConfluenceServerWebhook(w http.ResponseWriter, r *http.Request, p *Pl
 			return
 		}
 
+		if err := p.processConfluenceServerWebhook(body); err != nil {
+			p.client.Log.Error("Failed to process Confluence server webhook", "error", err.Error())
+			http.Error(w, "Failed to process Confluence server webhook", http.StatusInternalServerError)
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		ReturnStatusOK(w)
-
-		go p.processConfluenceServerWebhook(body)
 	} else {
 		event, err := serializer.ConfluenceServerEventFromJSON(r.Body)
 		if err != nil {
@@ -67,17 +71,16 @@ func handleConfluenceServerWebhook(w http.ResponseWriter, r *http.Request, p *Pl
 	}
 }
 
-func (p *Plugin) processConfluenceServerWebhook(body []byte) {
+func (p *Plugin) processConfluenceServerWebhook(body []byte) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			p.client.Log.Error("Recovered while processing Confluence server webhook", "panic", fmt.Sprintf("%v", recovered), "stack", string(debug.Stack()))
+			err = fmt.Errorf("panic while processing Confluence server webhook: %v", recovered)
 		}
 	}()
 
 	var event *serializer.ConfluenceServerWebhookPayload
 	if err := json.Unmarshal(body, &event); err != nil {
-		p.client.Log.Error("Error occurred while unmarshaling Confluence server webhook payload", "Error", err.Error())
-		return
+		return fmt.Errorf("error unmarshalling Confluence server webhook payload: %w", err)
 	}
 
 	p.client.Log.Info("Processing Confluence server webhook event",
@@ -98,7 +101,7 @@ func (p *Plugin) processConfluenceServerWebhook(body []byte) {
 			"space_id", event.Space.ID,
 			"space_key", event.Space.SpaceKey,
 		)
-		return
+		return nil
 	}
 
 	pluginConfig := config.GetConfig()
@@ -117,63 +120,42 @@ func (p *Plugin) processConfluenceServerWebhook(body []byte) {
 			if strings.Contains(event.Event, Space) {
 				spaceKey, spaceErr := p.GetSpaceKeyFromSpaceIDWithAPIToken(event.Space.ID, pluginConfig)
 				if spaceErr != nil {
-					p.client.Log.Error("Error getting space key using space ID with API token", "error", spaceErr)
-					return
+					return fmt.Errorf("error getting space key using space ID with API token: %w", spaceErr)
 				}
 				event.Space.SpaceKey = spaceKey
 			}
 
 			eventData, eventErr := p.GetEventDataWithAPIToken(event, pluginConfig)
 			if eventErr != nil {
-				p.client.Log.Error("Error getting event data with API token",
-					"error", eventErr,
-					"event", event.Event,
-					"user_key", event.UserKey,
-					"comment_id", event.Comment.ID,
-					"page_id", event.Page.ID,
-					"space_id", event.Space.ID,
-					"space_key", event.Space.SpaceKey,
-				)
-				return
+				return fmt.Errorf("error getting event data with API token: %w", eventErr)
 			}
 
 			eventTriggerer, triggerErr := p.GetUserFromUserKeyWithAPIToken(event.UserKey, pluginConfig)
 			if triggerErr != nil {
-				p.client.Log.Error("Error getting details of the event triggerer user using API token", "error", triggerErr.Error())
-				return
+				return fmt.Errorf("error getting details of the event triggerer user using API token: %w", triggerErr)
 			}
 
 			eventData.BaseURL = pluginConfig.ConfluenceURL
 			notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName, event.UserKey)
-			return
+			return nil
 		}
 
 		p.client.Log.Info("Error getting client for the user who triggered webhook event. Sending generic notification")
 		notification.SendGenericWHNotification(event, p.BotUserID, pluginConfig.ConfluenceURL)
-		return
+		return nil
 	}
 
 	if strings.Contains(event.Event, Space) {
 		spaceKey, spaceErr := client.(*confluenceServerClient).GetSpaceKeyFromSpaceID(event.Space.ID)
 		if spaceErr != nil {
-			p.client.Log.Error("Failed to get Space Key from the Space ID", "Space ID", event.Space.ID, "error", spaceErr.Error())
-			return
+			return fmt.Errorf("failed to get space key from the space ID %d: %w", event.Space.ID, spaceErr)
 		}
 		event.Space.SpaceKey = spaceKey
 	}
 
 	eventData, eventErr := p.GetEventData(event, client)
 	if eventErr != nil {
-		p.client.Log.Error("Error getting event data for the Confluence server webhook",
-			"error", eventErr.Error(),
-			"event", event.Event,
-			"user_key", event.UserKey,
-			"comment_id", event.Comment.ID,
-			"page_id", event.Page.ID,
-			"space_id", event.Space.ID,
-			"space_key", event.Space.SpaceKey,
-		)
-		return
+		return fmt.Errorf("error getting event data for the Confluence server webhook: %w", eventErr)
 	}
 
 	eventData.BaseURL = pluginConfig.ConfluenceURL
@@ -183,19 +165,18 @@ func (p *Plugin) processConfluenceServerWebhook(body []byte) {
 	if pluginConfig.AdminAPIToken != "" {
 		eventTriggerer, err = p.GetUserFromUserKeyWithAPIToken(event.UserKey, pluginConfig)
 		if err != nil {
-			p.client.Log.Error("Error getting details of the event triggerer user using API token", "error", err.Error())
-			return
+			return fmt.Errorf("error getting details of the event triggerer user using API token: %w", err)
 		}
 	} else {
 		// Fallback to user's OAuth token if Admin API Token is not configured
 		eventTriggerer, err = client.(*confluenceServerClient).GetUserFromUserKey(event.UserKey)
 		if err != nil {
-			p.client.Log.Error("Error getting details of the event triggerer user", "error", err.Error())
-			return
+			return fmt.Errorf("error getting details of the event triggerer user: %w", err)
 		}
 	}
 
 	notification.SendConfluenceNotifications(eventData, event.Event, p.BotUserID, eventTriggerer.DisplayName, event.UserKey)
+	return nil
 }
 
 func isSupportedServerWebhookEvent(eventType string) bool {
@@ -230,7 +211,7 @@ func (p *Plugin) GetClientFromUserKey(instanceID, eventUserKey string) (Client, 
 	if err != nil {
 		mmUserID, err = p.tryRecoverMattermostUserIDFromConfluenceUser(instanceID, eventUserKey)
 		if err != nil {
-			if errors.Cause(err) == store.ErrNotFound {
+			if stderrors.Is(err, store.ErrNotFound) || errors.Cause(err) == store.ErrNotFound {
 				p.client.Log.Info("No Mattermost user mapping found for Confluence user", "InstanceID", instanceID, "Confluence Account ID", eventUserKey)
 			} else {
 				p.client.Log.Error("Error getting Mattermost User ID from Confluence ID", "InstanceID", instanceID, "Confluence Account ID", eventUserKey, "error", err.Error())

@@ -149,8 +149,7 @@ func handleCreatePageFromPost(w http.ResponseWriter, r *http.Request, p *Plugin)
 	}
 
 	if err = publishThreadPost(p, userID, post.ChannelId, threadID, fmt.Sprintf("Created Confluence page: [%s](%s)", createdPage.Title, pageURL)); err != nil {
-		http.Error(w, "Confluence page was created, but publishing the Mattermost thread post failed.", http.StatusInternalServerError)
-		return
+		p.client.Log.Error("Confluence page was created, but publishing the Mattermost thread post failed", "user_id", userID, "thread_id", threadID, "page_id", createdPage.ID, "error", err.Error())
 	}
 
 	_ = p.API.SendEphemeralPost(userID, &model.Post{
